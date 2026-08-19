@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+powercycle-config = { path = "src/powercycle/config" }
+powercycle-search = { path = "src/powercycle/search" }
 
 [[bin]]
 name = "powercycle"

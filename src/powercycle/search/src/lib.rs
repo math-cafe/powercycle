@@ -8,4 +8,4 @@
 
 mod run;
 
-pub use run::{Invocation, RunContext, RunError, RunPaths, RunState, RunStatus};
+pub use run::{Invocation, ProgramInfo, RunContext, RunError, RunPaths, RunState, RunStatus};

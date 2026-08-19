@@ -16,6 +16,24 @@ const RUN_VERSION: u32 = 1;
 const STATUS_FORMAT: &str = "powercycle-status";
 const STATUS_VERSION: u32 = 1;
 
+/// Information identifying the executable that created a run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProgramInfo {
+    pub name: String,
+    pub version: String,
+}
+
+impl ProgramInfo {
+    /// Creates program identification metadata.
+    #[must_use]
+    pub fn new(name: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            version: version.into(),
+        }
+    }
+}
+
 /// Captured process invocation.
 ///
 /// `argv` is the authoritative representation available to the program.
@@ -159,7 +177,6 @@ pub struct RunContext {
     run_id: String,
     k: u32,
     n: usize,
-    started_unix_ms: u64,
     paths: RunPaths,
     status: RunStatus,
 }
@@ -176,13 +193,14 @@ impl RunContext {
         config: &Config,
         k: u32,
         n: usize,
+        program: ProgramInfo,
         invocation: Invocation,
     ) -> Result<Self, RunError> {
         let started_unix_ms = unix_time_ms()?;
 
         let run_id = generate_run_id(started_unix_ms, k, n);
 
-        Self::create_with_id(config, k, n, invocation, run_id, started_unix_ms)
+        Self::create_with_id(config, k, n, program, invocation, run_id, started_unix_ms)
     }
 
     /// Returns the run identifier.
@@ -272,6 +290,7 @@ impl RunContext {
         config: &Config,
         k: u32,
         n: usize,
+        program: ProgramInfo,
         invocation: Invocation,
         run_id: String,
         started_unix_ms: u64,
@@ -306,6 +325,7 @@ impl RunContext {
             version: RUN_VERSION,
             run_id: run_id.clone(),
             started_unix_ms,
+            program,
             problem: ProblemManifest { k, n },
             invocation: invocation.clone(),
             configuration: ConfigurationManifest {
@@ -341,7 +361,6 @@ impl RunContext {
             run_id,
             k,
             n,
-            started_unix_ms,
             paths,
             status,
         };
@@ -349,6 +368,11 @@ impl RunContext {
         context.write_status()?;
 
         context.log_info("run started")?;
+
+        context.log_info(format!(
+            "program: {} {}",
+            manifest.program.name, manifest.program.version
+        ))?;
 
         context.log_info(format!("command: {}", invocation.command))?;
 
@@ -402,6 +426,7 @@ struct RunManifest {
     version: u32,
     run_id: String,
     started_unix_ms: u64,
+    program: ProgramInfo,
     problem: ProblemManifest,
     invocation: Invocation,
     configuration: ConfigurationManifest,
@@ -696,6 +721,10 @@ mod tests {
         }
     }
 
+    fn test_program() -> ProgramInfo {
+        ProgramInfo::new("pc-search", "0.1.0")
+    }
+
     #[test]
     fn reconstructs_command_from_argv() {
         let invocation = Invocation::from_args(
@@ -735,6 +764,7 @@ mod tests {
             &config,
             5,
             490_463,
+            test_program(),
             invocation,
             "test-run".to_owned(),
             1_000,
@@ -763,7 +793,7 @@ mod tests {
     }
 
     #[test]
-    fn manifest_contains_invocation_and_problem() {
+    fn manifest_contains_program_invocation_and_problem() {
         let temporary = TempDirectory::new();
         let config = test_config(&temporary);
 
@@ -776,6 +806,7 @@ mod tests {
             &config,
             5,
             490_463,
+            test_program(),
             invocation,
             "manifest-test".to_owned(),
             2_000,
@@ -785,6 +816,12 @@ mod tests {
         let contents = fs::read_to_string(&run.paths().manifest).unwrap();
 
         assert!(contents.contains("format = \"powercycle-run\""));
+
+        assert!(contents.contains("[program]"));
+
+        assert!(contents.contains("name = \"pc-search\""));
+
+        assert!(contents.contains("version = \"0.1.0\""));
 
         assert!(contents.contains("k = 5"));
 
@@ -806,6 +843,7 @@ mod tests {
             &config,
             5,
             490_463,
+            test_program(),
             invocation,
             "status-test".to_owned(),
             3_000,
@@ -836,6 +874,7 @@ mod tests {
             &config,
             5,
             490_463,
+            test_program(),
             invocation,
             "update-test".to_owned(),
             4_000,
@@ -860,7 +899,7 @@ mod tests {
     }
 
     #[test]
-    fn log_contains_reconstructed_command() {
+    fn log_contains_program_and_reconstructed_command() {
         let temporary = TempDirectory::new();
         let config = test_config(&temporary);
 
@@ -873,6 +912,7 @@ mod tests {
             &config,
             5,
             490_463,
+            test_program(),
             invocation,
             "log-test".to_owned(),
             5_000,
@@ -880,6 +920,8 @@ mod tests {
         .unwrap();
 
         let contents = fs::read_to_string(&run.paths().log).unwrap();
+
+        assert!(contents.contains("program: pc-search 0.1.0"));
 
         assert!(contents.contains("command: pc-search 5 490463 --solver sat"));
 
@@ -906,6 +948,7 @@ mod tests {
                 &config,
                 5,
                 490_463,
+                test_program(),
                 invocation,
                 "duplicate".to_owned(),
                 6_000,
