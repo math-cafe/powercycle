@@ -30,6 +30,7 @@ path = "src/powercycle/bin/pc-export.rs"
 resolver = "3"
 members = [
     "src/powercycle/core",
+    "src/powercycle/format",
     "src/powercycle/search",
     "src/powercycle/patch",
 ]
