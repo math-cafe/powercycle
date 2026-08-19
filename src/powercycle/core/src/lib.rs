@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Core mathematical structures for powercycle.
+//!
+//! This crate contains no solver, command-line interface, logging,
+//! configuration or persistence code.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod error;
+mod graph;
+mod types;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use error::GraphError;
+pub use graph::PowerGraph;
+pub use types::{Edge, EdgeId, Vertex};
