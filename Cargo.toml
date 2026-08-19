@@ -1,0 +1,38 @@
+[package]
+name = "powercycle"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+
+[[bin]]
+name = "powercycle"
+path = "src/powercycle/bin/powercycle.rs"
+
+[[bin]]
+name = "pc-search"
+path = "src/powercycle/bin/pc-search.rs"
+
+[[bin]]
+name = "pc-analyze"
+path = "src/powercycle/bin/pc-analyze.rs"
+
+[[bin]]
+name = "pc-patch"
+path = "src/powercycle/bin/pc-patch.rs"
+
+[[bin]]
+name = "pc-export"
+path = "src/powercycle/bin/pc-export.rs"
+
+[workspace]
+resolver = "3"
+members = [
+    "src/powercycle/core",
+    "src/powercycle/search",
+    "src/powercycle/patch",
+]
+exclude = [
+    "src/verify/rust",
+]

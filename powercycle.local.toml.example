@@ -1,0 +1,9 @@
+# Configuration locale de powercycle.
+# Copier ce fichier vers powercycle.local.toml.
+# Les valeurs définies ici surchargeront powercycle.toml.
+
+[paths]
+# data_dir = "/chemin/vers/powercycle-data"
+
+[logging]
+# level = "debug"

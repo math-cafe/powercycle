@@ -1,0 +1,12 @@
+# Shared powercycle configuration.
+# k and n are intentionally not defined here.
+
+[paths]
+data_dir = "data"
+runs = "runs"
+dumps = "dumps"
+certificates = "certificates"
+
+[logging]
+level = "info"
+timestamps = true

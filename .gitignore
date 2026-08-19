@@ -1,0 +1,23 @@
+# Cargo
+target/
+
+# Generated executables
+/bin/*
+!/bin/.gitkeep
+
+# Working data
+/data/runs/*
+!/data/runs/.gitkeep
+
+/data/dumps/*
+!/data/dumps/.gitkeep
+
+/data/certificates/*
+!/data/certificates/.gitkeep
+
+# Local configuration
+/powercycle.local.toml
+
+# Python
+__pycache__/
+*.py[cod]
