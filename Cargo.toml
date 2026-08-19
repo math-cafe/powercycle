@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 powercycle-config = { path = "src/powercycle/config" }
+powercycle-core = { path = "src/powercycle/core" }
 powercycle-search = { path = "src/powercycle/search" }
 
 [[bin]]
