@@ -1,14 +1,11 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Search infrastructure for powercycle.
+//!
+//! This crate contains the long-running search machinery used by
+//! `pc-search`.
+//!
+//! Solver-specific code is deliberately kept separate from the run/session
+//! infrastructure.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod run;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use run::{Invocation, RunContext, RunError, RunPaths, RunState, RunStatus};

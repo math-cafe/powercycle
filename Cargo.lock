@@ -129,6 +129,12 @@ version = "0.1.0"
 [[package]]
 name = "powercycle-search"
 version = "0.1.0"
+dependencies = [
+ "powercycle-config",
+ "serde",
+ "serde_json",
+ "toml",
+]
 
 [[package]]
 name = "proc-macro2"
