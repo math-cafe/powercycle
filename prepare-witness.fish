@@ -1,30 +1,50 @@
 #!/usr/bin/env fish
 
-# Build the curated versioned witness bundle for G_5(490463).
+# Build a curated versioned witness bundle.
 #
 # Usage:
-#   ./prepare-witness.fish [cycle.txt] [final.pcdump.json]
+#   ./prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]
 #
-# Defaults are the files produced by the validated 2026-08-20 run.
+# The bundle is written to witness/k<k>-n<n>/. Each artifact is stored
+# compressed, next to the SHA-256 of its uncompressed form.
+#
+# When a checksum file already exists, the freshly computed SHA-256 must match
+# it. Re-running the script on an existing bundle is therefore a verification
+# rather than a silent overwrite.
+#
+# The optional scan.txt is the pc-scan lower-bound certificate, as produced by
+#
+#   pc-scan <k> 1 <n>
 
 set -l project_root (realpath (status dirname))
-set -l witness_dir "$project_root/witness/k5-n490463"
 
-set -l cycle_source "cycle.txt"
-set -l dump_source "data/runs/1787236600305-p279014-k5-n490463/dumps/t000001-patched-c0001-g490463-r0-fa62a76a36f8.pcdump.json"
-
-if test (count $argv) -ge 1
-    set cycle_source $argv[1]
-end
-
-if test (count $argv) -ge 2
-    set dump_source $argv[2]
-end
-
-if test (count $argv) -gt 2
-    echo "usage: prepare-witness.fish [cycle.txt] [final.pcdump.json]" >&2
+if test (count $argv) -lt 4 -o (count $argv) -gt 5
+    echo "usage: prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]" >&2
     exit 2
 end
+
+set -l k $argv[1]
+set -l n $argv[2]
+set -l cycle_source $argv[3]
+set -l dump_source $argv[4]
+
+set -l scan_source ""
+
+if test (count $argv) -ge 5
+    set scan_source $argv[5]
+end
+
+if not string match -qr '^[0-9]+$' -- $k
+    echo "prepare-witness: k must be a positive integer: $k" >&2
+    exit 2
+end
+
+if not string match -qr '^[0-9]+$' -- $n
+    echo "prepare-witness: n must be a positive integer: $n" >&2
+    exit 2
+end
+
+set -l witness_dir "$project_root/witness/k$k-n$n"
 
 if not type -q zstd
     echo "prepare-witness: zstd is required" >&2
@@ -36,60 +56,62 @@ if not type -q sha256sum
     exit 1
 end
 
-if not test -f "$cycle_source"
-    echo "prepare-witness: missing cycle witness: $cycle_source" >&2
-    exit 1
-end
+# Stores one artifact: verify or record its SHA-256, then compress it.
+#
+#   $argv[1]  source path
+#   $argv[2]  canonical name inside the bundle
+function store_artifact --argument-names source name
+    set -l witness_dir $argv[3]
 
-if not test -f "$dump_source"
-    echo "prepare-witness: missing final dump: $dump_source" >&2
-    exit 1
+    if not test -f "$source"
+        echo "prepare-witness: missing artifact: $source" >&2
+        return 1
+    end
+
+    set -l actual (sha256sum "$source" | string split " " | head -n 1)
+    set -l checksum_path "$witness_dir/$name.sha256"
+
+    if test -f "$checksum_path"
+        set -l expected (cat "$checksum_path" | string split " " | head -n 1)
+
+        if test "$actual" != "$expected"
+            echo "prepare-witness: $name SHA-256 mismatch" >&2
+            echo "  expected: $expected" >&2
+            echo "  found   : $actual" >&2
+            return 1
+        end
+    end
+
+    echo "$actual  $name" >"$checksum_path"
+
+    zstd \
+        --force \
+        --quiet \
+        --threads=0 \
+        --ultra \
+        -19 \
+        "$source" \
+        -o "$witness_dir/$name.zst"
+
+    echo "  $name : $actual"
 end
 
 mkdir -p "$witness_dir"
 
-set -l expected_cycle_sha "9c9119e5946db4cf3c433e0c90bb6b098afb19f89a2a3fe6f48bfed669cf1efe"
-set -l actual_cycle_sha (sha256sum "$cycle_source" | string split " " | head -n 1)
-
-if test "$actual_cycle_sha" != "$expected_cycle_sha"
-    echo "prepare-witness: cycle SHA-256 mismatch" >&2
-    echo "  expected: $expected_cycle_sha" >&2
-    echo "  found   : $actual_cycle_sha" >&2
-    exit 1
-end
-
-echo "$actual_cycle_sha  cycle.txt" > "$witness_dir/cycle.txt.sha256"
-
-zstd \
-    --force \
-    --quiet \
-    --threads=0 \
-    --ultra \
-    -19 \
-    "$cycle_source" \
-    -o "$witness_dir/cycle.txt.zst"
-
-set -l dump_sha (sha256sum "$dump_source" | string split " " | head -n 1)
-
-echo "$dump_sha  final.pcdump.json" > "$witness_dir/final.pcdump.json.sha256"
-
-zstd \
-    --force \
-    --quiet \
-    --threads=0 \
-    --ultra \
-    -19 \
-    "$dump_source" \
-    -o "$witness_dir/final.pcdump.json.zst"
-
-echo "Witness bundle prepared:"
+echo "Witness bundle: k = $k, n = $n"
 echo "  $witness_dir"
 echo
-echo "Cycle:"
-echo "  SHA-256 : $actual_cycle_sha"
-echo "  archive : cycle.txt.zst"
+
+store_artifact "$cycle_source" cycle.txt "$witness_dir"; or exit 1
+store_artifact "$dump_source" final.pcdump.json "$witness_dir"; or exit 1
+
+if test -n "$scan_source"
+    store_artifact "$scan_source" scan.txt "$witness_dir"; or exit 1
+end
+
 echo
-echo "Final dump:"
-echo "  dump ID : fa62a76a36f8..."
-echo "  SHA-256 : $dump_sha"
-echo "  archive : final.pcdump.json.zst"
+echo "Verify the witness with:"
+echo "  zstd -dc $witness_dir/cycle.txt.zst > /tmp/powercycle-cycle.txt"
+echo "  cargo run --release --manifest-path src/verify/rust/Cargo.toml \\"
+echo "    -- $k $n /tmp/powercycle-cycle.txt"
+echo "  python src/verify/python/verify-cycle.py $k $n /tmp/powercycle-cycle.txt"
