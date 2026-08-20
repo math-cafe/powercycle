@@ -1,6 +1,104 @@
 # powercycle
 
-Tools for searching, transforming, exporting and independently verifying
-power-sum Hamiltonian cycles.
+Search, transformation, export and independent verification of power-sum
+Hamiltonian cycles.
+
+For integers `k >= 2` and `n >= 1`, the **power-sum graph** `G_k(n)` has vertex
+set `{1, ..., n}` and joins two distinct vertices `x != y` whenever `x + y` is a
+perfect `k`-th power. A Hamiltonian cycle of `G_k(n)` is an arrangement of the
+integers `1` through `n` around a circle in which **every adjacent pair sums to a
+perfect `k`-th power**. For `k = 2` this is the classical square-sum problem.
+
+`n_min(k)` denotes the least `n` for which such an arrangement exists.
+
+## Results
+
+| k | n_min | closed form | witness |
+|---|---|---|---|
+| 2 | 32 | — | known result ([A272259](https://oeis.org/A272259)) |
+| 3 | **473** | `9^3 - 8^3/2` | [`witness/k3-n473/`](witness/k3-n473/) |
+| 4 | **9641** | `11^4 - 10^4/2` | [`witness/k4-n9641/`](witness/k4-n9641/) |
+| 5 | **246877** | `13^5 - 12^5/2` | [`witness/k5-n246877/`](witness/k5-n246877/) |
+| 6 | `>= 15748961` | `17^6 - 16^6/2` | open |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | open |
+
+Each value in bold is a theorem, not a bound: the bundle carries a Hamiltonian
+cycle **and** a certificate ruling out every smaller `n`. See
+[`witness/README.md`](witness/README.md) for the argument and its limits — in
+particular why `k = 2` does not follow the same pattern.
+
+## Verify a result
+
+Nothing here asks you to trust the search. From a fresh clone:
+
+```console
+zstd -dc witness/k5-n246877/cycle.txt.zst > /tmp/cycle.txt
+
+sha256sum /tmp/cycle.txt
+cat witness/k5-n246877/cycle.txt.sha256
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  -- 5 246877 /tmp/cycle.txt
+
+python src/verify/python/verify-cycle.py 5 246877 /tmp/cycle.txt
+```
+
+The two verifiers are deliberately outside the powercycle dependency graph. One
+is a standalone Rust crate with **no dependencies at all**; the other uses only
+the Python standard library. Each receives `k`, `n` and a candidate list, and
+checks that it is a permutation of `1..n` whose consecutive sums, closure
+included, are perfect `k`-th powers. Neither reads a dump, an edge ID, a patch
+history or anything produced by the solver.
+
+To re-derive the lower bound instead:
+
+```console
+zstd -dc witness/k5-n246877/scan.txt.zst > /tmp/scan.txt
+cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/scan.txt
+```
+
+## Tools
+
+| binary | role |
+|---|---|
+| `pc-scan` | decides, over a range of `n`, which values a necessary condition rules out |
+| `pc-search` | SAT-based 2-factor search with subtour elimination and in-place repair |
+| `pc-patch` | pushes a stored dump further, outside the run that produced it |
+| `pc-export` | extracts a canonical witness from a one-cycle dump |
+
+Typical use:
+
+```console
+cargo build --release
+
+./target/release/pc-scan --compact 5 1 250000     # where to look
+./target/release/pc-search 5 246877 10            # search there
+./target/release/pc-export <dump>.pcdump.json     # certify
+```
+
+`pc-scan` reporting `CANDIDATE` means no implemented obstruction was found. It
+does not prove that a Hamiltonian cycle exists.
+
+## Approach
+
+A Hamiltonian cycle is relaxed to a **2-factor**: one SAT variable per graph
+edge, constrained so that every vertex has selected degree exactly two. A model
+is then a disjoint union of cycles covering all vertices, and is Hamiltonian
+exactly when there is one cycle. Subtour-elimination cuts are added lazily and
+under a per-round budget, and each raw factor is pushed towards a single cycle by
+combinatorial repair operators — `three-opt-111`, `three-opt-21` and a
+depth-bounded alternating repair.
+
+See [`doc/en/algorithms.md`](doc/en/algorithms.md) for the algorithms,
+[`doc/en/architecture.md`](doc/en/architecture.md) for the crate layout and
+[`doc/en/dump-format.md`](doc/en/dump-format.md) for the exchange format.
+
+## Licence
+
+Source code is dual-licensed [MIT](LICENSE-MIT) OR
+[Apache-2.0](LICENSE-APACHE), at your option.
+
+`witness/` is data, not software, and is released under
+[CC0 1.0](witness/LICENSE). See [LICENSE](LICENSE).
 
 [Documentation française](README.fr.md)
