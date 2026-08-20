@@ -162,21 +162,43 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
                 run,
                 format!("  repair depth   : <= {}", ALTERNATING_REPAIR_MAX_DEPTH),
             )?;
-
-            report(
-                run,
-                "  raw dumps      : records and parents of patched records",
-            )?;
-
-            report(run, "  patched dumps  : records and Hamiltonian factors")?;
         }
 
         PatchMode::ProbeOnly => {
             report(run, "  every SAT tour : greedy 1+1+1 / 2+1 closure only")?;
 
             report(run, "  repair         : disabled")?;
+        }
+    }
 
-            report(run, "  raw dumps      : every SAT tour")?;
+    report(run, format!("  dump policy    : {}", problem.dump_policy))?;
+
+    match (problem.patch_mode, problem.dump_policy) {
+        (PatchMode::Full, DumpPolicy::Always) => {
+            report(run, "  dumps          : raw and patched factor every tour")?;
+        }
+
+        (PatchMode::Full, DumpPolicy::Records) => {
+            report(
+                run,
+                "  dumps          : raw/patched records and Hamiltonian factors",
+            )?;
+        }
+
+        (PatchMode::Full, DumpPolicy::Never) => {
+            report(run, "  dumps          : disabled")?;
+        }
+
+        (PatchMode::ProbeOnly, DumpPolicy::Always) => {
+            report(run, "  dumps          : raw SAT factor every tour")?;
+        }
+
+        (PatchMode::ProbeOnly, DumpPolicy::Records) => {
+            report(run, "  dumps          : raw SAT records only")?;
+        }
+
+        (PatchMode::ProbeOnly, DumpPolicy::Never) => {
+            report(run, "  dumps          : disabled")?;
         }
     }
 
@@ -228,20 +250,37 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
         let raw_update = update_records(run, "RAW", &mut raw_records, tour, &raw_decomposition)?;
 
         /*
-         * Probe-only runs are intended to be reusable SAT candidate
-         * libraries. Persist every raw SAT factor before doing any
-         * patchability work so that a later pc-patch run can reproduce
-         * experiments without invoking the SAT solver again.
+         * Probe-only runs persist raw SAT factors only.
+         *
+         * The effective default is --dump=always, but an explicit
+         * --dump=records or --dump=never can reduce or disable persistence.
          */
         if problem.patch_mode == PatchMode::ProbeOnly {
-            save_raw_dump(
-                run,
-                &graph,
-                &factor,
-                &raw_decomposition,
-                tour,
-                vec!["probe-only".to_owned(), "raw-sat-factor".to_owned()],
-            )?;
+            let save_raw = match problem.dump_policy {
+                DumpPolicy::Always => true,
+                DumpPolicy::Records => raw_update.any(),
+                DumpPolicy::Never => false,
+            };
+
+            if save_raw {
+                let mut reasons = vec!["probe-only".to_owned(), "raw-sat-factor".to_owned()];
+
+                match problem.dump_policy {
+                    DumpPolicy::Always => {
+                        reasons.push("dump-always".to_owned());
+                    }
+
+                    DumpPolicy::Records => {
+                        raw_update.append_reasons("raw", &mut reasons);
+                    }
+
+                    DumpPolicy::Never => {
+                        unreachable!("never policy cannot request a raw dump");
+                    }
+                }
+
+                save_raw_dump(run, &graph, &factor, &raw_decomposition, tour, reasons)?;
+            }
         }
 
         let patch_start = Instant::now();
@@ -300,25 +339,47 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
         if problem.patch_mode == PatchMode::Full {
             let patched_hamiltonian = patched_decomposition.is_hamiltonian();
 
-            let save_patched = patched_update.any() || patched_hamiltonian;
+            let save_patched = match problem.dump_policy {
+                DumpPolicy::Always => true,
 
-            let save_raw = raw_update.any() || save_patched;
+                DumpPolicy::Records => patched_update.any() || patched_hamiltonian,
+
+                DumpPolicy::Never => false,
+            };
+
+            let save_raw = match problem.dump_policy {
+                DumpPolicy::Always => true,
+
+                DumpPolicy::Records => raw_update.any() || save_patched,
+
+                DumpPolicy::Never => false,
+            };
 
             let mut raw_dump_id = None;
 
             if save_raw {
-                let mut reasons = Vec::new();
+                let mut reasons = vec!["raw-sat-factor".to_owned()];
 
-                reasons.push("raw-sat-factor".to_owned());
+                match problem.dump_policy {
+                    DumpPolicy::Always => {
+                        reasons.push("dump-always".to_owned());
+                    }
 
-                raw_update.append_reasons("raw", &mut reasons);
+                    DumpPolicy::Records => {
+                        raw_update.append_reasons("raw", &mut reasons);
 
-                if save_patched {
-                    reasons.push("parent-of-patched-record".to_owned());
-                }
+                        if save_patched {
+                            reasons.push("parent-of-patched-record".to_owned());
+                        }
 
-                if patched_hamiltonian {
-                    reasons.push("parent-of-hamiltonian".to_owned());
+                        if patched_hamiltonian {
+                            reasons.push("parent-of-hamiltonian".to_owned());
+                        }
+                    }
+
+                    DumpPolicy::Never => {
+                        unreachable!("never policy cannot request a raw dump");
+                    }
                 }
 
                 raw_dump_id = Some(save_raw_dump(
@@ -334,10 +395,22 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             if save_patched {
                 let mut reasons = Vec::new();
 
-                patched_update.append_reasons("patched", &mut reasons);
+                match problem.dump_policy {
+                    DumpPolicy::Always => {
+                        reasons.push("dump-always".to_owned());
+                    }
 
-                if patched_hamiltonian {
-                    reasons.push("hamiltonian".to_owned());
+                    DumpPolicy::Records => {
+                        patched_update.append_reasons("patched", &mut reasons);
+
+                        if patched_hamiltonian {
+                            reasons.push("hamiltonian".to_owned());
+                        }
+                    }
+
+                    DumpPolicy::Never => {
+                        unreachable!("never policy cannot request a patched dump");
+                    }
                 }
 
                 let parent_dump_id = raw_dump_id.expect("patched dump must have a raw parent dump");
@@ -1092,11 +1165,47 @@ impl fmt::Display for PatchMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DumpPolicy {
+    Always,
+    Records,
+    Never,
+}
+
+impl DumpPolicy {
+    fn parse(value: &str) -> Result<Self, CliError> {
+        match value {
+            "always" => Ok(Self::Always),
+
+            "records" => Ok(Self::Records),
+
+            "never" => Ok(Self::Never),
+
+            _ => Err(CliError::InvalidDumpPolicy {
+                value: value.to_owned(),
+            }),
+        }
+    }
+}
+
+impl fmt::Display for DumpPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Always => write!(f, "always"),
+
+            Self::Records => write!(f, "records"),
+
+            Self::Never => write!(f, "never"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Problem {
     k: u32,
     n: usize,
     max_tours: u64,
     patch_mode: PatchMode,
+    dump_policy: DumpPolicy,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1141,6 +1250,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
 
     let mut patch_mode = PatchMode::Full;
     let mut probe_only_seen = false;
+    let mut dump_policy = None::<DumpPolicy>;
 
     for argument in arguments {
         match argument.as_str() {
@@ -1153,6 +1263,18 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
 
                 probe_only_seen = true;
                 patch_mode = PatchMode::ProbeOnly;
+            }
+
+            value if value.starts_with("--dump=") => {
+                if dump_policy.is_some() {
+                    return Err(CliError::DuplicateOption { option: "--dump" });
+                }
+
+                let value = value
+                    .strip_prefix("--dump=")
+                    .expect("matched --dump= prefix must strip");
+
+                dump_policy = Some(DumpPolicy::parse(value)?);
             }
 
             value if value.starts_with('-') => {
@@ -1205,11 +1327,17 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         return Err(CliError::TourCountZero);
     }
 
+    let dump_policy = dump_policy.unwrap_or(match patch_mode {
+        PatchMode::Full => DumpPolicy::Records,
+        PatchMode::ProbeOnly => DumpPolicy::Always,
+    });
+
     Ok(Problem {
         k,
         n,
         max_tours,
         patch_mode,
+        dump_policy,
     })
 }
 
@@ -1227,6 +1355,8 @@ enum CliError {
 
     InvalidTourCount { value: String },
 
+    InvalidDumpPolicy { value: String },
+
     ExponentTooSmall { k: u32 },
 
     VertexCountZero,
@@ -1238,14 +1368,17 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage => {
-                write!(f, "usage: pc-search [--probe-only] <k> <n> [max-tours]")
+                write!(
+                    f,
+                    "usage: pc-search [--probe-only] [--dump=always|records|never] <k> <n> [max-tours]"
+                )
             }
 
             Self::UnknownOption { value } => {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-search [--probe-only] <k> <n> [max-tours]"
+                     usage: pc-search [--probe-only] [--dump=always|records|never] <k> <n> [max-tours]"
                 )
             }
 
@@ -1274,6 +1407,14 @@ impl fmt::Display for CliError {
                     f,
                     "invalid tour count {value:?}: \
                      expected an integer >= 1"
+                )
+            }
+
+            Self::InvalidDumpPolicy { value } => {
+                write!(
+                    f,
+                    "invalid dump policy {value:?}: \
+                     expected always, records or never"
                 )
             }
 
@@ -1323,6 +1464,7 @@ mod tests {
                 n: 490_463,
                 max_tours: DEFAULT_MAX_TOURS,
                 patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Records,
             })
         );
     }
@@ -1336,6 +1478,7 @@ mod tests {
                 n: 490_463,
                 max_tours: 100,
                 patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Records,
             })
         );
     }
@@ -1349,6 +1492,7 @@ mod tests {
                 n: 490_463,
                 max_tours: 100,
                 patch_mode: PatchMode::ProbeOnly,
+                dump_policy: DumpPolicy::Always,
             })
         );
     }
@@ -1362,6 +1506,67 @@ mod tests {
                 n: 490_463,
                 max_tours: 100,
                 patch_mode: PatchMode::ProbeOnly,
+                dump_policy: DumpPolicy::Always,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_explicit_dump_policy_in_full_mode() {
+        assert_eq!(
+            parse_problem(&args(&["--dump=always", "5", "490463", "100",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: 100,
+                patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Always,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_explicit_dump_policy_in_probe_mode() {
+        assert_eq!(
+            parse_problem(&args(&["--probe-only", "--dump=records", "5", "490463",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: DEFAULT_MAX_TOURS,
+                patch_mode: PatchMode::ProbeOnly,
+                dump_policy: DumpPolicy::Records,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_dump_never() {
+        assert_eq!(
+            parse_problem(&args(&["5", "490463", "--dump=never",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: DEFAULT_MAX_TOURS,
+                patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Never,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_dump_policy() {
+        assert_eq!(
+            parse_problem(&args(&["--dump=always", "--dump=records", "5", "490463",],)),
+            Err(CliError::DuplicateOption { option: "--dump" })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_dump_policy() {
+        assert_eq!(
+            parse_problem(&args(&["--dump=sometimes", "5", "490463",],)),
+            Err(CliError::InvalidDumpPolicy {
+                value: "sometimes".to_owned(),
             })
         );
     }
