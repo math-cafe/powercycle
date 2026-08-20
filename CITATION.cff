@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+title: >-
+  powercycle: search, transformation and independent verification of
+  power-sum Hamiltonian cycles
+message: >-
+  If you use this software or the witnesses it publishes, please cite it
+  using the metadata below.
+type: software
+authors:
+  - family-names: Nouvier
+    given-names: Frédéric
+    email: frnouv.math@gmail.com
+license: MIT OR Apache-2.0
+version: 0.1.0
+abstract: >-
+  For integers k >= 2 and n >= 1, the power-sum graph G_k(n) has vertex set
+  {1, ..., n} and joins two distinct vertices whose sum is a perfect k-th
+  power. This repository contains the tooling used to search for Hamiltonian
+  cycles in these graphs, together with curated, independently verifiable
+  witnesses and the lower-bound certificates that establish minimality.
+keywords:
+  - Hamiltonian cycle
+  - power-sum graph
+  - square-sum problem
+  - perfect powers
+  - SAT solving
+  - combinatorial search
+  - reproducible computation
+references:
+  - type: data
+    title: witness/k5-n246877 — minimal Hamiltonian witness for k = 5
+    authors:
+      - family-names: Nouvier
+        given-names: Frédéric
+    license: CC0-1.0
+    notes: >-
+      Establishes n_min(5) = 246877, together with the scan certificate
+      ruling out every smaller n.
