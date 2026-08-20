@@ -4,14 +4,13 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use powercycle_config::Config;
-
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
-
-use powercycle_patch::{greedy_three_opt_21, greedy_three_opt_111};
-
+use powercycle_format::{Dump, MoveRecord, Provenance};
+use powercycle_patch::{find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111};
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
 const DEFAULT_MAX_TOURS: u64 = 20;
+const ALTERNATING_REPAIR_MAX_DEPTH: usize = 3;
 
 fn main() -> ExitCode {
     match run() {
@@ -19,7 +18,6 @@ fn main() -> ExitCode {
 
         Err(error) => {
             eprintln!("pc-search: {error}");
-
             ExitCode::FAILURE
         }
     }
@@ -27,9 +25,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let invocation = Invocation::capture()?;
-
     let problem = parse_problem(&invocation.argv)?;
-
     let config = Config::load()?;
 
     let program = ProgramInfo::new("pc-search", env!("CARGO_PKG_VERSION"));
@@ -153,10 +149,36 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
 
     report(run, "patchability analysis")?;
 
-    report(
-        run,
-        "  every SAT tour : alternating greedy 1+1+1 / 2+1 closure",
-    )?;
+    report(run, format!("  mode           : {}", problem.patch_mode))?;
+
+    match problem.patch_mode {
+        PatchMode::Full => {
+            report(
+                run,
+                "  every SAT tour : greedy 1+1+1 / 2+1 plus alternating repair",
+            )?;
+
+            report(
+                run,
+                format!("  repair depth   : <= {}", ALTERNATING_REPAIR_MAX_DEPTH),
+            )?;
+
+            report(
+                run,
+                "  raw dumps      : records and parents of patched records",
+            )?;
+
+            report(run, "  patched dumps  : records and Hamiltonian factors")?;
+        }
+
+        PatchMode::ProbeOnly => {
+            report(run, "  every SAT tour : greedy 1+1+1 / 2+1 closure only")?;
+
+            report(run, "  repair         : disabled")?;
+
+            report(run, "  raw dumps      : every SAT tour")?;
+        }
+    }
 
     report(run, "  patch result   : dry-run only")?;
 
@@ -165,7 +187,6 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
     report(run, "  records        : raw and patched tracked separately")?;
 
     let mut raw_records = SearchRecords::default();
-
     let mut patched_records = SearchRecords::default();
 
     let search_start = Instant::now();
@@ -204,13 +225,30 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             solve_elapsed,
         )?;
 
-        update_records(run, "RAW", &mut raw_records, tour, &raw_decomposition)?;
+        let raw_update = update_records(run, "RAW", &mut raw_records, tour, &raw_decomposition)?;
+
+        /*
+         * Probe-only runs are intended to be reusable SAT candidate
+         * libraries. Persist every raw SAT factor before doing any
+         * patchability work so that a later pc-patch run can reproduce
+         * experiments without invoking the SAT solver again.
+         */
+        if problem.patch_mode == PatchMode::ProbeOnly {
+            save_raw_dump(
+                run,
+                &graph,
+                &factor,
+                &raw_decomposition,
+                tour,
+                vec!["probe-only".to_owned(), "raw-sat-factor".to_owned()],
+            )?;
+        }
 
         let patch_start = Instant::now();
 
         report(run, format!("tour {tour} patch dry-run"))?;
 
-        let patch = patch_to_local_closure(run, &graph, &factor)?;
+        let patch = patch_to_local_closure(run, &graph, &factor, problem.patch_mode)?;
 
         let patch_elapsed = patch_start.elapsed();
 
@@ -226,6 +264,11 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
         )?;
 
         report(run, format!("  2+1 moves      : {}", patch.two_one_moves))?;
+
+        report(
+            run,
+            format!("  repairs        : {}", patch.alternating_repairs),
+        )?;
 
         report(run, format!("  total moves    : {}", patch.total_moves()))?;
 
@@ -246,7 +289,7 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             format!("  patch time     : {:.3} s", patch_elapsed.as_secs_f64()),
         )?;
 
-        update_records(
+        let patched_update = update_records(
             run,
             "PATCHED",
             &mut patched_records,
@@ -254,13 +297,73 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             &patched_decomposition,
         )?;
 
+        if problem.patch_mode == PatchMode::Full {
+            let patched_hamiltonian = patched_decomposition.is_hamiltonian();
+
+            let save_patched = patched_update.any() || patched_hamiltonian;
+
+            let save_raw = raw_update.any() || save_patched;
+
+            let mut raw_dump_id = None;
+
+            if save_raw {
+                let mut reasons = Vec::new();
+
+                reasons.push("raw-sat-factor".to_owned());
+
+                raw_update.append_reasons("raw", &mut reasons);
+
+                if save_patched {
+                    reasons.push("parent-of-patched-record".to_owned());
+                }
+
+                if patched_hamiltonian {
+                    reasons.push("parent-of-hamiltonian".to_owned());
+                }
+
+                raw_dump_id = Some(save_raw_dump(
+                    run,
+                    &graph,
+                    &factor,
+                    &raw_decomposition,
+                    tour,
+                    reasons,
+                )?);
+            }
+
+            if save_patched {
+                let mut reasons = Vec::new();
+
+                patched_update.append_reasons("patched", &mut reasons);
+
+                if patched_hamiltonian {
+                    reasons.push("hamiltonian".to_owned());
+                }
+
+                let parent_dump_id = raw_dump_id.expect("patched dump must have a raw parent dump");
+
+                save_patched_dump(
+                    run,
+                    &graph,
+                    &factor,
+                    &patch,
+                    &patched_decomposition,
+                    tour,
+                    parent_dump_id,
+                    reasons,
+                )?;
+            }
+        }
+
         if patched_decomposition.is_hamiltonian() {
             report(run, format!("tour {tour} PATCHED FACTOR IS HAMILTONIAN"))?;
 
-            report(
-                run,
-                "  note           : dry-run factor is not yet persisted",
-            )?;
+            if problem.patch_mode == PatchMode::ProbeOnly {
+                report(
+                    run,
+                    "  note           : probe-only persists raw SAT factors only",
+                )?;
+            }
         }
 
         if raw_decomposition.is_hamiltonian() {
@@ -279,9 +382,8 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
          * SEC generation still uses the raw SAT factor.
          *
          * The patched factor is used only to measure patchability and
-         * establish patched records. This keeps the SAT/SEC dynamics
-         * unchanged while we compare the reconstructed search with the
-         * historical exploratory implementation.
+         * establish patched records. This preserves the current SAT/SEC
+         * dynamics while we reconstruct the historical exploratory search.
          */
         report(
             run,
@@ -381,21 +483,116 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
+fn save_raw_dump(
+    run: &RunContext,
+    graph: &PowerGraph,
+    factor: &Factor,
+    decomposition: &CycleDecomposition,
+    tour: u64,
+    reasons: Vec<String>,
+) -> Result<String, Box<dyn Error>> {
+    let mut provenance = Provenance::new("pc-search", env!("CARGO_PKG_VERSION"));
+
+    provenance.session = Some(run.id().to_owned());
+
+    provenance.tour = Some(tour);
+
+    provenance.reason = reasons;
+
+    let dump = Dump::new(graph, factor, factor, provenance, Vec::new())?;
+
+    let dump_id = dump.dump_id.clone();
+    let dump_id_prefix = &dump_id[..12];
+
+    let filename = format!(
+        "t{tour:06}-raw-c{:04}-g{}-r{}-{dump_id_prefix}.pcdump.json",
+        decomposition.cycle_count(),
+        decomposition.largest_cycle().len(),
+        decomposition.residual_vertex_count(),
+    );
+
+    let path = run.paths().root.join("dumps").join(filename);
+
+    dump.write(&path)?;
+
+    report(run, format!("  raw dump       : {}", path.display()))?;
+
+    Ok(dump_id)
+}
+
+fn save_patched_dump(
+    run: &RunContext,
+    graph: &PowerGraph,
+    base_factor: &Factor,
+    patch: &PatchClosureResult,
+    decomposition: &CycleDecomposition,
+    tour: u64,
+    parent_dump_id: String,
+    reasons: Vec<String>,
+) -> Result<String, Box<dyn Error>> {
+    let mut provenance = Provenance::new("pc-search", env!("CARGO_PKG_VERSION"));
+
+    provenance.session = Some(run.id().to_owned());
+
+    provenance.tour = Some(tour);
+
+    provenance.reason = reasons;
+
+    provenance.parent_dump_id = Some(parent_dump_id);
+
+    let dump = Dump::new(
+        graph,
+        base_factor,
+        &patch.factor,
+        provenance,
+        patch.history.clone(),
+    )?;
+
+    let dump_id = dump.dump_id.clone();
+    let dump_id_prefix = &dump_id[..12];
+
+    let filename = format!(
+        "t{tour:06}-patched-c{:04}-g{}-r{}-{dump_id_prefix}.pcdump.json",
+        decomposition.cycle_count(),
+        decomposition.largest_cycle().len(),
+        decomposition.residual_vertex_count(),
+    );
+
+    let path = run.paths().root.join("dumps").join(filename);
+
+    dump.write(&path)?;
+
+    report(run, format!("  patched dump   : {}", path.display()))?;
+
+    Ok(dump_id)
+}
+
 fn patch_to_local_closure(
     run: &RunContext,
     graph: &PowerGraph,
     factor: &Factor,
+    patch_mode: PatchMode,
 ) -> Result<PatchClosureResult, Box<dyn Error>> {
     let mut current = Factor::new(graph, factor.selected_edges().to_vec())?;
 
+    let mut history = Vec::<MoveRecord>::new();
+
     let mut pass = 1usize;
-
     let mut total_111_moves = 0usize;
-
     let mut total_21_moves = 0usize;
+    let mut alternating_repairs = 0usize;
 
     loop {
         report(run, format!("patch pass {pass}"))?;
+
+        /*
+         * Phase 1: exhaust all direct 1+1+1 moves.
+         *
+         * The greedy implementation may perform several atomic moves.
+         * For persistence we record the whole valid factor-to-factor
+         * transformation as one replayable batch.
+         */
+        let before_111 = Factor::new(graph, current.selected_edges().to_vec())?;
 
         let one_one_one_start = Instant::now();
 
@@ -408,6 +605,14 @@ fn patch_to_local_closure(
         total_111_moves += one_one_one_moves;
 
         current = one_one_one.into_factor();
+
+        if one_one_one_moves > 0 {
+            history.push(symmetric_difference_move(
+                "three-opt-111-batch",
+                &before_111,
+                &current,
+            ));
+        }
 
         let after_111 = CycleDecomposition::new(graph, &current)?;
 
@@ -425,29 +630,25 @@ fn patch_to_local_closure(
         )?;
 
         if after_111.is_hamiltonian() {
+            report(run, "  closure        : Hamiltonian after 1+1+1")?;
+
             return Ok(PatchClosureResult {
                 factor: current,
+                history,
                 passes: pass,
                 one_one_one_moves: total_111_moves,
                 two_one_moves: total_21_moves,
+                alternating_repairs,
             });
         }
 
         /*
-         * The previous 2+1 phase, if there was one, was exhaustive.
-         * If the next 1+1+1 phase cannot move, both operators are now
-         * simultaneously blocked.
+         * Phase 2: exhaust all direct 2+1 absorptions.
+         *
+         * As above, persistence records the complete greedy phase as one
+         * factor-preserving batch.
          */
-        if pass > 1 && one_one_one_moves == 0 {
-            report(run, "  closure        : fixed point after 1+1+1")?;
-
-            return Ok(PatchClosureResult {
-                factor: current,
-                passes: pass,
-                one_one_one_moves: total_111_moves,
-                two_one_moves: total_21_moves,
-            });
-        }
+        let before_21 = Factor::new(graph, current.selected_edges().to_vec())?;
 
         let two_one_start = Instant::now();
 
@@ -460,6 +661,14 @@ fn patch_to_local_closure(
         total_21_moves += two_one_moves;
 
         current = two_one.into_factor();
+
+        if two_one_moves > 0 {
+            history.push(symmetric_difference_move(
+                "three-opt-21-batch",
+                &before_21,
+                &current,
+            ));
+        }
 
         let after_21 = CycleDecomposition::new(graph, &current)?;
 
@@ -477,27 +686,169 @@ fn patch_to_local_closure(
         )?;
 
         if after_21.is_hamiltonian() {
-            return Ok(PatchClosureResult {
-                factor: current,
-                passes: pass,
-                one_one_one_moves: total_111_moves,
-                two_one_moves: total_21_moves,
-            });
-        }
-
-        if two_one_moves == 0 {
-            report(run, "  closure        : fixed point after 2+1")?;
+            report(run, "  closure        : Hamiltonian after 2+1")?;
 
             return Ok(PatchClosureResult {
                 factor: current,
+                history,
                 passes: pass,
                 one_one_one_moves: total_111_moves,
                 two_one_moves: total_21_moves,
+                alternating_repairs,
             });
         }
 
+        /*
+         * Probe-only mode deliberately stops before alternating repair.
+         *
+         * We still allow another direct pass if the current pass actually
+         * changed the factor, because an exhaustive 2+1 phase may expose a
+         * new 1+1+1 opportunity.
+         */
+        if patch_mode == PatchMode::ProbeOnly {
+            if one_one_one_moves == 0 && two_one_moves == 0 {
+                report(
+                    run,
+                    "  closure        : probe fixed point for 1+1+1 and 2+1",
+                )?;
+
+                return Ok(PatchClosureResult {
+                    factor: current,
+                    history,
+                    passes: pass,
+                    one_one_one_moves: total_111_moves,
+                    two_one_moves: total_21_moves,
+                    alternating_repairs,
+                });
+            }
+
+            pass += 1;
+            continue;
+        }
+
+        /*
+         * Full mode:
+         *
+         * Both direct operators are now exhausted. Try one bounded
+         * alternating repair. If one satellite can be absorbed, restart
+         * from 1+1+1 because the repair changes the giant topology and may
+         * create new direct moves.
+         */
+        report(
+            run,
+            format!(
+                "  repair         : searching depth <= {}",
+                ALTERNATING_REPAIR_MAX_DEPTH
+            ),
+        )?;
+
+        let repair_start = Instant::now();
+
+        let repair = find_alternating_repair(graph, &current, ALTERNATING_REPAIR_MAX_DEPTH)?;
+
+        let repair_search_elapsed = repair_start.elapsed();
+
+        let Some(repair) = repair else {
+            report(
+                run,
+                format!(
+                    "  repair         : none found, {:.3} s",
+                    repair_search_elapsed.as_secs_f64()
+                ),
+            )?;
+
+            report(
+                run,
+                "  closure        : fixed point for 1+1+1, 2+1 and repair",
+            )?;
+
+            return Ok(PatchClosureResult {
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        };
+
+        let depth = repair.depth();
+        let absorbed = repair.absorbed_vertices();
+        let removed_count = repair.removed().len();
+        let added_count = repair.added().len();
+
+        let before_repair = Factor::new(graph, current.selected_edges().to_vec())?;
+
+        current = repair.apply(graph, &current)?;
+
+        history.push(symmetric_difference_move(
+            format!("alternating-repair-depth-{depth}"),
+            &before_repair,
+            &current,
+        ));
+
+        alternating_repairs += 1;
+
+        let after_repair = CycleDecomposition::new(graph, &current)?;
+
+        report(
+            run,
+            format!(
+                "  repair         : FOUND depth {}, absorbed {}, \
+                 toggle {}-{}, {} cycles, giant {}, residual {}, {:.3} s",
+                depth,
+                absorbed,
+                removed_count,
+                added_count,
+                after_repair.cycle_count(),
+                after_repair.largest_cycle().len(),
+                after_repair.residual_vertex_count(),
+                repair_search_elapsed.as_secs_f64()
+            ),
+        )?;
+
+        if after_repair.is_hamiltonian() {
+            report(
+                run,
+                "  closure        : Hamiltonian after alternating repair",
+            )?;
+
+            return Ok(PatchClosureResult {
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
+
+        /*
+         * A repair succeeded. Restart the cheap/direct operators before
+         * attempting another repair.
+         */
         pass += 1;
     }
+}
+
+fn symmetric_difference_move(
+    kind: impl Into<String>,
+    before: &Factor,
+    after: &Factor,
+) -> MoveRecord {
+    let removed = before
+        .selected_edges()
+        .iter()
+        .copied()
+        .filter(|&edge_id| !after.contains(edge_id));
+
+    let added = after
+        .selected_edges()
+        .iter()
+        .copied()
+        .filter(|&edge_id| !before.contains(edge_id));
+
+    MoveRecord::new(kind, removed, added)
 }
 
 fn report_factor(
@@ -573,9 +924,7 @@ fn satellite_stats(decomposition: &CycleDecomposition) -> (usize, Option<usize>,
     let largest_index = decomposition.largest_cycle_index();
 
     let mut count = 0usize;
-
     let mut minimum = usize::MAX;
-
     let mut maximum = 0usize;
 
     for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
@@ -586,9 +935,7 @@ fn satellite_stats(decomposition: &CycleDecomposition) -> (usize, Option<usize>,
         let size = cycle.len();
 
         count += 1;
-
         minimum = minimum.min(size);
-
         maximum = maximum.max(size);
     }
 
@@ -605,11 +952,9 @@ fn update_records(
     records: &mut SearchRecords,
     tour: u64,
     decomposition: &CycleDecomposition,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<RecordUpdate, Box<dyn Error>> {
     let cycles = decomposition.cycle_count();
-
     let giant = decomposition.largest_cycle().len();
-
     let residual = decomposition.residual_vertex_count();
 
     let candidate = FactorRecord {
@@ -619,16 +964,6 @@ fn update_records(
         residual,
     };
 
-    /*
-     * Primary record:
-     *
-     *   1. fewer cycles;
-     *   2. then fewer residual vertices.
-     *
-     * This is intentionally close to the patchability criterion used during
-     * the exploratory phase: a factor that closes to fewer cycles is more
-     * interesting even when its raw SAT decomposition looks worse.
-     */
     let cycle_record = match records.best_cycles {
         None => true,
 
@@ -671,7 +1006,10 @@ fn update_records(
         )?;
     }
 
-    Ok(())
+    Ok(RecordUpdate {
+        cycle_record,
+        giant_record,
+    })
 }
 
 fn report_record_summary(
@@ -723,15 +1061,33 @@ fn report(run: &RunContext, message: impl AsRef<str>) -> Result<(), Box<dyn Erro
 #[derive(Debug)]
 struct PatchClosureResult {
     factor: Factor,
+    history: Vec<MoveRecord>,
     passes: usize,
     one_one_one_moves: usize,
     two_one_moves: usize,
+    alternating_repairs: usize,
 }
 
 impl PatchClosureResult {
     #[must_use]
     const fn total_moves(&self) -> usize {
-        self.one_one_one_moves + self.two_one_moves
+        self.one_one_one_moves + self.two_one_moves + self.alternating_repairs
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PatchMode {
+    Full,
+    ProbeOnly,
+}
+
+impl fmt::Display for PatchMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Full => write!(f, "full"),
+
+            Self::ProbeOnly => write!(f, "probe-only"),
+        }
     }
 }
 
@@ -740,6 +1096,30 @@ struct Problem {
     k: u32,
     n: usize,
     max_tours: u64,
+    patch_mode: PatchMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RecordUpdate {
+    cycle_record: bool,
+    giant_record: bool,
+}
+
+impl RecordUpdate {
+    #[must_use]
+    const fn any(self) -> bool {
+        self.cycle_record || self.giant_record
+    }
+
+    fn append_reasons(self, prefix: &str, reasons: &mut Vec<String>) {
+        if self.cycle_record {
+            reasons.push(format!("{prefix}-cycle-record"));
+        }
+
+        if self.giant_record {
+            reasons.push(format!("{prefix}-giant-record"));
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -757,27 +1137,57 @@ struct SearchRecords {
 }
 
 fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
-    if arguments.len() < 2 || arguments.len() > 3 {
+    let mut positional = Vec::<&str>::new();
+
+    let mut patch_mode = PatchMode::Full;
+    let mut probe_only_seen = false;
+
+    for argument in arguments {
+        match argument.as_str() {
+            "--probe-only" => {
+                if probe_only_seen {
+                    return Err(CliError::DuplicateOption {
+                        option: "--probe-only",
+                    });
+                }
+
+                probe_only_seen = true;
+                patch_mode = PatchMode::ProbeOnly;
+            }
+
+            value if value.starts_with('-') => {
+                return Err(CliError::UnknownOption {
+                    value: value.to_owned(),
+                });
+            }
+
+            value => {
+                positional.push(value);
+            }
+        }
+    }
+
+    if positional.len() < 2 || positional.len() > 3 {
         return Err(CliError::Usage);
     }
 
-    let k = arguments[0]
+    let k = positional[0]
         .parse::<u32>()
         .map_err(|_| CliError::InvalidExponent {
-            value: arguments[0].clone(),
+            value: positional[0].to_owned(),
         })?;
 
-    let n = arguments[1]
+    let n = positional[1]
         .parse::<usize>()
         .map_err(|_| CliError::InvalidVertexCount {
-            value: arguments[1].clone(),
+            value: positional[1].to_owned(),
         })?;
 
-    let max_tours = if let Some(value) = arguments.get(2) {
+    let max_tours = if let Some(value) = positional.get(2) {
         value
             .parse::<u64>()
             .map_err(|_| CliError::InvalidTourCount {
-                value: value.clone(),
+                value: (*value).to_owned(),
             })?
     } else {
         DEFAULT_MAX_TOURS
@@ -795,12 +1205,21 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         return Err(CliError::TourCountZero);
     }
 
-    Ok(Problem { k, n, max_tours })
+    Ok(Problem {
+        k,
+        n,
+        max_tours,
+        patch_mode,
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CliError {
     Usage,
+
+    UnknownOption { value: String },
+
+    DuplicateOption { option: &'static str },
 
     InvalidExponent { value: String },
 
@@ -819,7 +1238,19 @@ impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage => {
-                write!(f, "usage: pc-search <k> <n> [max-tours]")
+                write!(f, "usage: pc-search [--probe-only] <k> <n> [max-tours]")
+            }
+
+            Self::UnknownOption { value } => {
+                write!(
+                    f,
+                    "unknown option {value:?}; \
+                     usage: pc-search [--probe-only] <k> <n> [max-tours]"
+                )
+            }
+
+            Self::DuplicateOption { option } => {
+                write!(f, "option {option:?} was specified more than once")
             }
 
             Self::InvalidExponent { value } => {
@@ -891,6 +1322,7 @@ mod tests {
                 k: 5,
                 n: 490_463,
                 max_tours: DEFAULT_MAX_TOURS,
+                patch_mode: PatchMode::Full,
             })
         );
     }
@@ -903,6 +1335,53 @@ mod tests {
                 k: 5,
                 n: 490_463,
                 max_tours: 100,
+                patch_mode: PatchMode::Full,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_probe_only_before_problem() {
+        assert_eq!(
+            parse_problem(&args(&["--probe-only", "5", "490463", "100",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: 100,
+                patch_mode: PatchMode::ProbeOnly,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_probe_only_after_problem() {
+        assert_eq!(
+            parse_problem(&args(&["5", "490463", "100", "--probe-only",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: 100,
+                patch_mode: PatchMode::ProbeOnly,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_probe_only() {
+        assert_eq!(
+            parse_problem(&args(&["--probe-only", "5", "490463", "--probe-only",],)),
+            Err(CliError::DuplicateOption {
+                option: "--probe-only",
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_option() {
+        assert_eq!(
+            parse_problem(&args(&["--fast", "5", "490463",],)),
+            Err(CliError::UnknownOption {
+                value: "--fast".to_owned(),
             })
         );
     }

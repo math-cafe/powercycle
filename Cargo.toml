@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 powercycle-config = { path = "src/powercycle/config" }
 powercycle-core = { path = "src/powercycle/core" }
+powercycle-format = { version = "0.1.0", path = "src/powercycle/format" }
 powercycle-patch = { path = "src/powercycle/patch" }
 powercycle-search = { path = "src/powercycle/search" }
 

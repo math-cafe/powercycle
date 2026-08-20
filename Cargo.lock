@@ -414,6 +414,7 @@ version = "0.1.0"
 dependencies = [
  "powercycle-config",
  "powercycle-core",
+ "powercycle-format",
  "powercycle-patch",
  "powercycle-search",
 ]
