@@ -14,22 +14,26 @@ The main principles are:
 - witness verification is independent of all powercycle libraries;
 - all algorithms are generic in `k` and `n`.
 
-The intended workflow is:
+The workflow has two entry points.
+
+Deciding whether a given `n` is worth attacking at all:
+
+```text
+pc-scan
+    ↓
+IMPOSSIBLE  (a necessary condition fails)
+    or
+CANDIDATE   (no implemented obstruction found)
+```
+
+Producing and certifying a witness:
 
 ```text
 pc-search
     ↓
-promising 2-factor dump
+2-factor dump, patched in place towards a single cycle
     ↓
-pc-analyze
-    ↓
-pc-patch
-    ↓
-new dump
-    ↓
-...
-    ↓
-one-cycle factor
+one-cycle dump
     ↓
 pc-export
     ↓
@@ -38,12 +42,20 @@ Hamiltonian witness
 independent Rust / Python verification
 ```
 
+`pc-search` applies the patching operators itself between SAT tours, so the
+common path needs no separate patching step. `pc-patch` exists for the case
+where a stored dump is to be pushed further, or with a different repair depth,
+outside the run that produced it.
+
 ## 2. Repository layout
 
 ```text
 powercycle/
 ├── Cargo.toml
 ├── Cargo.lock
+├── rust-toolchain.toml
+├── CITATION.cff
+├── LICENSE
 ├── powercycle.toml
 ├── powercycle.local.toml.example
 ├── powercycle-init.fish
@@ -58,9 +70,8 @@ powercycle/
 │   │   ├── search/
 │   │   ├── patch/
 │   │   └── bin/
-│   │       ├── powercycle.rs
+│   │       ├── pc-scan.rs
 │   │       ├── pc-search.rs
-│   │       ├── pc-analyze.rs
 │   │       ├── pc-patch.rs
 │   │       └── pc-export.rs
 │   │
@@ -145,26 +156,47 @@ promising 2-factors toward Hamiltonian cycles.
 
 ## 4. Executables
 
+### `pc-scan`
+
+Reports, for every `n` in a range, whether an implemented necessary condition
+rules `G_k(n)` out. Each `n` is first tested with the graph-free degree check;
+only the survivors pay for a graph construction and the full preflight.
+
+```console
+pc-scan [--compact] <k> <start> <end>
+```
+
+A `CANDIDATE` verdict means no implemented obstruction was found. It does not
+prove that a Hamiltonian cycle exists.
+
 ### `pc-search`
 
-Long-running producer of promising 2-factor dumps.
+Long-running producer of 2-factor dumps. Alternates SAT tours with budgeted
+subtour-elimination cuts, and applies the patching operators to each raw factor
+in search of a single cycle.
 
-### `pc-analyze`
-
-Read-only inspection and analysis of a dump.
+```console
+pc-search [--probe-only] [--dump=always|records|never]
+          [--on-hamiltonian=stop|continue] <k> <n> [max-tours]
+```
 
 ### `pc-patch`
 
-Transforms a dump and writes a derived dump.
+Reads a stored dump, drives the patching operators over it and writes a derived
+dump. Useful for resuming work on a saved factor at a different repair depth.
+
+```console
+pc-patch [--max-depth=N] <dump.pcdump.json>
+```
 
 ### `pc-export`
 
-Exports a Hamiltonian-cycle witness from a one-cycle dump.
+Exports a canonical Hamiltonian-cycle witness on stdout from a one-cycle dump.
+Refuses any dump whose factor is not a single cycle.
 
-### `powercycle`
-
-Optional convenience façade exposing the same functionality through
-subcommands.
+```console
+pc-export <dump.pcdump.json>
+```
 
 ## 5. Independent verification
 
@@ -261,6 +293,10 @@ data/runs/<run-id>/
 └── dumps/
 ```
 
+`checkpoint/` is created by every run but is not written to yet. Long searches
+therefore cannot currently be resumed, and a run interrupted by anything other
+than Ctrl-C leaves `status.json` reporting `running` with no process behind it.
+
 `data/dumps/` is reserved for imported or manually selected dumps outside a
 specific run.
 
@@ -272,21 +308,35 @@ None of `data/` is versioned.
 
 `witness/` contains selected versioned scientific results.
 
-A witness bundle may eventually contain:
+A witness bundle contains:
 
 ```text
-witness/k5-n490463/
+witness/k5-n246877/
 ├── README.md
 ├── README.fr.md
-├── cycle.txt.zst
+├── cycle.txt.zst              existence
 ├── cycle.txt.sha256
-├── final.pcdump.json.zst
+├── scan.txt.zst               lower bound, when minimality is claimed
+├── scan.txt.sha256
+├── final.pcdump.json.zst      provenance
 └── final.pcdump.json.sha256
 ```
 
-The cycle witness is the mathematically essential object.
+The cycle witness is the mathematically essential object. Every artifact is
+stored compressed next to the SHA-256 of its **uncompressed** form, so the
+checksum identifies the mathematical content rather than a particular
+compression.
 
-The final dump provides additional provenance and reproducibility material.
+A bundle that claims a minimal `n` carries a second certificate. `scan.txt` is
+the `pc-scan` output over `1 .. n`, which records the obstruction found at every
+smaller value. Existence and minimality are then both reproducible from the
+bundle alone.
+
+Bundles are built by `prepare-witness.fish`, which verifies any checksum already
+present rather than overwriting it silently.
+
+`witness/` is released under CC0; the rest of the repository is dual-licensed
+MIT OR Apache-2.0.
 
 ## 10. Documentation policy
 

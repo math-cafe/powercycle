@@ -14,16 +14,8 @@ powercycle-patch = { path = "src/powercycle/patch" }
 powercycle-search = { path = "src/powercycle/search" }
 
 [[bin]]
-name = "powercycle"
-path = "src/powercycle/bin/powercycle.rs"
-
-[[bin]]
 name = "pc-search"
 path = "src/powercycle/bin/pc-search.rs"
-
-[[bin]]
-name = "pc-analyze"
-path = "src/powercycle/bin/pc-analyze.rs"
 
 [[bin]]
 name = "pc-patch"
