@@ -258,6 +258,45 @@ impl SatFactorSolver {
         }
     }
 
+    /// Adds one clause that excludes exactly the supplied 2-factor.
+    ///
+    /// Under the base selected-degree-equals-two constraints, every valid
+    /// 2-factor contains exactly `n` selected edges. Therefore the disjunction
+    /// of the negations of all currently selected edge variables excludes this
+    /// factor while leaving every distinct 2-factor admissible.
+    ///
+    /// Returns the width of the blocking clause.
+    pub fn add_factor_blocking_clause(
+        &mut self,
+        graph: &PowerGraph,
+        factor: &Factor,
+    ) -> Result<usize, SatError> {
+        self.ensure_compatible_graph(graph)?;
+
+        factor
+            .validate_two_factor(graph)
+            .map_err(SatError::Factor)?;
+
+        let literals = factor
+            .selected_edges()
+            .iter()
+            .copied()
+            .map(|edge_id| edge_literal(edge_id, true))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let width = literals.len();
+        let clause: Clause = literals.into_iter().collect();
+
+        self.solver
+            .add_clause(clause)
+            .map_err(|error| SatError::Solver {
+                operation: "add factor-blocking clause",
+                message: error.to_string(),
+            })?;
+
+        Ok(width)
+    }
+
     /// Adds one cycle-breaking cut for every cycle except the largest.
     pub fn add_cycle_breaking_cuts(
         &mut self,
@@ -1139,6 +1178,30 @@ mod tests {
         assert_eq!(cycle.clauses, 1);
 
         assert_eq!(cycle.literals, 5);
+    }
+
+    #[test]
+    fn factor_blocking_clause_excludes_the_current_factor() {
+        let graph = PowerGraph::new(2, 32).unwrap();
+
+        let mut solver = SatFactorSolver::new(&graph).unwrap();
+
+        let first = solver
+            .solve(&graph)
+            .unwrap()
+            .expect("G_2(32) must admit a 2-factor");
+
+        let width = solver.add_factor_blocking_clause(&graph, &first).unwrap();
+
+        assert_eq!(width, first.edge_count());
+
+        if let Some(second) = solver.solve(&graph).unwrap() {
+            assert_ne!(
+                second.selected_edges(),
+                first.selected_edges(),
+                "the blocked 2-factor must not be returned again"
+            );
+        }
     }
 
     #[test]

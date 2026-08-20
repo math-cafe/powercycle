@@ -145,7 +145,22 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
 
     report(run, format!("  max literals   : {}", budget.max_literals))?;
 
-    report(run, format!("  max tours      : {}", problem.max_tours))?;
+    report(
+        run,
+        format!(
+            "  max tours      : {}",
+            if problem.max_tours == 0 {
+                "unlimited".to_owned()
+            } else {
+                problem.max_tours.to_string()
+            }
+        ),
+    )?;
+
+    report(
+        run,
+        format!("  on Hamiltonian : {}", problem.hamiltonian_policy),
+    )?;
 
     report(run, "patchability analysis")?;
 
@@ -194,7 +209,10 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
         }
 
         (PatchMode::ProbeOnly, DumpPolicy::Records) => {
-            report(run, "  dumps          : raw SAT records only")?;
+            report(
+                run,
+                "  dumps          : raw SAT records and Hamiltonian factors",
+            )?;
         }
 
         (PatchMode::ProbeOnly, DumpPolicy::Never) => {
@@ -213,7 +231,7 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
 
     let search_start = Instant::now();
 
-    for tour in 1..=problem.max_tours {
+    for tour in 1u64.. {
         report(run, format!("solving tour {tour}"))?;
 
         let solve_start = Instant::now();
@@ -256,9 +274,13 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
          * --dump=records or --dump=never can reduce or disable persistence.
          */
         if problem.patch_mode == PatchMode::ProbeOnly {
+            let raw_hamiltonian = raw_decomposition.is_hamiltonian();
+
             let save_raw = match problem.dump_policy {
                 DumpPolicy::Always => true,
-                DumpPolicy::Records => raw_update.any(),
+
+                DumpPolicy::Records => raw_update.any() || raw_hamiltonian,
+
                 DumpPolicy::Never => false,
             };
 
@@ -272,6 +294,10 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
 
                     DumpPolicy::Records => {
                         raw_update.append_reasons("raw", &mut reasons);
+
+                        if raw_hamiltonian {
+                            reasons.push("hamiltonian".to_owned());
+                        }
                     }
 
                     DumpPolicy::Never => {
@@ -428,7 +454,10 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             }
         }
 
-        if patched_decomposition.is_hamiltonian() {
+        let patched_hamiltonian = patched_decomposition.is_hamiltonian();
+        let raw_hamiltonian = raw_decomposition.is_hamiltonian();
+
+        if patched_hamiltonian {
             report(run, format!("tour {tour} PATCHED FACTOR IS HAMILTONIAN"))?;
 
             if problem.patch_mode == PatchMode::ProbeOnly {
@@ -439,14 +468,55 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             }
         }
 
-        if raw_decomposition.is_hamiltonian() {
+        if raw_hamiltonian {
             report(run, format!("tour {tour} raw SAT factor is Hamiltonian"))?;
+        }
+
+        if (patched_hamiltonian || raw_hamiltonian)
+            && problem.hamiltonian_policy == HamiltonianPolicy::Stop
+        {
+            report(run, "Hamiltonian policy: stop")?;
 
             break;
         }
 
-        if tour == problem.max_tours {
+        if problem.max_tours != 0 && tour >= problem.max_tours {
             break;
+        }
+
+        /*
+         * A raw Hamiltonian factor has no satellite cycle, so there is no
+         * boundary SEC to add. In continue mode we exclude exactly that raw
+         * 2-factor and ask CaDiCaL for another model.
+         *
+         * Because every admissible model is a degree-2 factor with exactly n
+         * selected edges, one clause containing the negation of every selected
+         * edge excludes exactly the current factor.
+         */
+        if raw_hamiltonian {
+            let block_start = Instant::now();
+
+            let width = solver.add_factor_blocking_clause(&graph, &factor)?;
+
+            report(run, format!("factor blocking round {tour}"))?;
+
+            report(
+                run,
+                format!(
+                    "  blocked RAW Hamiltonian with one clause of width {}",
+                    width
+                ),
+            )?;
+
+            report(
+                run,
+                format!(
+                    "  build time     : {:.3} s",
+                    block_start.elapsed().as_secs_f64()
+                ),
+            )?;
+
+            continue;
         }
 
         /*
@@ -1165,6 +1235,36 @@ impl fmt::Display for PatchMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HamiltonianPolicy {
+    Stop,
+    Continue,
+}
+
+impl HamiltonianPolicy {
+    fn parse(value: &str) -> Result<Self, CliError> {
+        match value {
+            "stop" => Ok(Self::Stop),
+
+            "continue" => Ok(Self::Continue),
+
+            _ => Err(CliError::InvalidHamiltonianPolicy {
+                value: value.to_owned(),
+            }),
+        }
+    }
+}
+
+impl fmt::Display for HamiltonianPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stop => write!(f, "stop"),
+
+            Self::Continue => write!(f, "continue"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DumpPolicy {
     Always,
     Records,
@@ -1206,6 +1306,7 @@ struct Problem {
     max_tours: u64,
     patch_mode: PatchMode,
     dump_policy: DumpPolicy,
+    hamiltonian_policy: HamiltonianPolicy,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1251,6 +1352,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
     let mut patch_mode = PatchMode::Full;
     let mut probe_only_seen = false;
     let mut dump_policy = None::<DumpPolicy>;
+    let mut hamiltonian_policy = None::<HamiltonianPolicy>;
 
     for argument in arguments {
         match argument.as_str() {
@@ -1275,6 +1377,20 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
                     .expect("matched --dump= prefix must strip");
 
                 dump_policy = Some(DumpPolicy::parse(value)?);
+            }
+
+            value if value.starts_with("--on-hamiltonian=") => {
+                if hamiltonian_policy.is_some() {
+                    return Err(CliError::DuplicateOption {
+                        option: "--on-hamiltonian",
+                    });
+                }
+
+                let value = value
+                    .strip_prefix("--on-hamiltonian=")
+                    .expect("matched --on-hamiltonian= prefix must strip");
+
+                hamiltonian_policy = Some(HamiltonianPolicy::parse(value)?);
             }
 
             value if value.starts_with('-') => {
@@ -1323,14 +1439,12 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         return Err(CliError::VertexCountZero);
     }
 
-    if max_tours == 0 {
-        return Err(CliError::TourCountZero);
-    }
-
     let dump_policy = dump_policy.unwrap_or(match patch_mode {
         PatchMode::Full => DumpPolicy::Records,
         PatchMode::ProbeOnly => DumpPolicy::Always,
     });
+
+    let hamiltonian_policy = hamiltonian_policy.unwrap_or(HamiltonianPolicy::Stop);
 
     Ok(Problem {
         k,
@@ -1338,6 +1452,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         max_tours,
         patch_mode,
         dump_policy,
+        hamiltonian_policy,
     })
 }
 
@@ -1357,11 +1472,11 @@ enum CliError {
 
     InvalidDumpPolicy { value: String },
 
+    InvalidHamiltonianPolicy { value: String },
+
     ExponentTooSmall { k: u32 },
 
     VertexCountZero,
-
-    TourCountZero,
 }
 
 impl fmt::Display for CliError {
@@ -1370,7 +1485,7 @@ impl fmt::Display for CliError {
             Self::Usage => {
                 write!(
                     f,
-                    "usage: pc-search [--probe-only] [--dump=always|records|never] <k> <n> [max-tours]"
+                    "usage: pc-search [--probe-only] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -1378,7 +1493,7 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-search [--probe-only] [--dump=always|records|never] <k> <n> [max-tours]"
+                     usage: pc-search [--probe-only] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -1406,7 +1521,7 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "invalid tour count {value:?}: \
-                     expected an integer >= 1"
+                     expected an integer >= 0 (0 means unlimited)"
                 )
             }
 
@@ -1415,6 +1530,14 @@ impl fmt::Display for CliError {
                     f,
                     "invalid dump policy {value:?}: \
                      expected always, records or never"
+                )
+            }
+
+            Self::InvalidHamiltonianPolicy { value } => {
+                write!(
+                    f,
+                    "invalid Hamiltonian policy {value:?}: \
+                     expected stop or continue"
                 )
             }
 
@@ -1431,14 +1554,6 @@ impl fmt::Display for CliError {
                     f,
                     "invalid vertex count n=0: \
                      expected n >= 1"
-                )
-            }
-
-            Self::TourCountZero => {
-                write!(
-                    f,
-                    "invalid tour count 0: \
-                     expected at least one tour"
                 )
             }
         }
@@ -1465,6 +1580,7 @@ mod tests {
                 max_tours: DEFAULT_MAX_TOURS,
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1479,6 +1595,7 @@ mod tests {
                 max_tours: 100,
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1493,6 +1610,7 @@ mod tests {
                 max_tours: 100,
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Always,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1507,6 +1625,7 @@ mod tests {
                 max_tours: 100,
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Always,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1521,6 +1640,7 @@ mod tests {
                 max_tours: 100,
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Always,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1535,6 +1655,7 @@ mod tests {
                 max_tours: DEFAULT_MAX_TOURS,
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
             })
         );
     }
@@ -1549,6 +1670,47 @@ mod tests {
                 max_tours: DEFAULT_MAX_TOURS,
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Never,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_continue_on_hamiltonian() {
+        assert_eq!(
+            parse_problem(&args(&["--on-hamiltonian=continue", "5", "490463", "0",],)),
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: 0,
+                patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Continue,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_hamiltonian_policy() {
+        assert_eq!(
+            parse_problem(&args(&[
+                "--on-hamiltonian=stop",
+                "--on-hamiltonian=continue",
+                "5",
+                "490463",
+            ],)),
+            Err(CliError::DuplicateOption {
+                option: "--on-hamiltonian",
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_hamiltonian_policy() {
+        assert_eq!(
+            parse_problem(&args(&["--on-hamiltonian=forever", "5", "490463",],)),
+            Err(CliError::InvalidHamiltonianPolicy {
+                value: "forever".to_owned(),
             })
         );
     }
@@ -1635,7 +1797,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_tour_count() {
+    fn parses_unlimited_tour_count_and_rejects_non_numeric_count() {
         assert_eq!(
             parse_problem(&args(&["5", "490463", "many",],)),
             Err(CliError::InvalidTourCount {
@@ -1645,7 +1807,14 @@ mod tests {
 
         assert_eq!(
             parse_problem(&args(&["5", "490463", "0",],)),
-            Err(CliError::TourCountZero)
+            Ok(Problem {
+                k: 5,
+                n: 490_463,
+                max_tours: 0,
+                patch_mode: PatchMode::Full,
+                dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
+            })
         );
     }
 }
