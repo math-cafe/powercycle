@@ -1,9 +1,13 @@
+mod pc_search_preflight;
+
 use std::error::Error;
 use std::fmt;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
+
+use pc_search_preflight::{PreflightReport, hamiltonian_preflight};
 
 use powercycle_config::Config;
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
@@ -149,11 +153,33 @@ fn run_search(
         format!("  build time     : {:.3} s", graph_elapsed.as_secs_f64()),
     )?;
 
+    let preflight_start = Instant::now();
+
+    let preflight = hamiltonian_preflight(&graph);
+
+    let preflight_elapsed = preflight_start.elapsed();
+
+    report_preflight(run, &preflight, preflight_elapsed)?;
+
+    if !preflight.passed() {
+        report(run, "SAT model skipped")?;
+
+        return Ok(SearchOutcome::Completed);
+    }
+
+    if interrupt_requested.load(Ordering::SeqCst) {
+        report(run, "graceful stop requested after Hamiltonian preflight")?;
+
+        return Ok(SearchOutcome::Interrupted);
+    }
+
     report(run, "building base SAT model")?;
 
     let model_start = Instant::now();
 
     let mut solver = SatFactorSolver::new(&graph)?;
+
+    solver.attach_interrupt_flag(Arc::clone(&interrupt_requested));
 
     let model_elapsed = model_start.elapsed();
 
@@ -1118,6 +1144,107 @@ fn symmetric_difference_move(
         .filter(|&edge_id| !before.contains(edge_id));
 
     MoveRecord::new(kind, removed, added)
+}
+
+fn report_preflight(
+    run: &RunContext,
+    preflight: &PreflightReport,
+    elapsed: Duration,
+) -> Result<(), Box<dyn Error>> {
+    report(run, "Hamiltonian preflight")?;
+
+    report(
+        run,
+        format!("  min degree       : {}", preflight.min_degree),
+    )?;
+
+    report(
+        run,
+        format!(
+            "  initial deg-2    : {}",
+            preflight.initial_degree_two_vertices
+        ),
+    )?;
+
+    report(
+        run,
+        format!(
+            "  connected        : {}",
+            match preflight.connected {
+                Some(true) => "true",
+                Some(false) => "false",
+                None => "not checked",
+            }
+        ),
+    )?;
+
+    report(
+        run,
+        format!(
+            "  articulation     : {}",
+            if preflight.articulation_checked {
+                match preflight.articulation_vertex {
+                    Some(vertex) => {
+                        format!("vertex {vertex}")
+                    }
+
+                    None => "none".to_owned(),
+                }
+            } else {
+                "not checked".to_owned()
+            }
+        ),
+    )?;
+
+    if preflight.propagation_checked {
+        report(
+            run,
+            format!("  forced edges     : {}", preflight.forced_edges),
+        )?;
+
+        report(
+            run,
+            format!("  forbidden edges  : {}", preflight.forbidden_edges),
+        )?;
+
+        report(
+            run,
+            format!(
+                "  propagation      : {} edge updates",
+                preflight.propagation_updates
+            ),
+        )?;
+
+        report(
+            run,
+            format!("  forced spanning  : {}", preflight.forced_spanning_cycle),
+        )?;
+    } else {
+        report(run, "  propagation      : not run")?;
+    }
+
+    report(
+        run,
+        format!(
+            "  result           : {}",
+            if preflight.passed() {
+                "PASS"
+            } else {
+                "IMPOSSIBLE"
+            }
+        ),
+    )?;
+
+    if let Some(obstruction) = &preflight.obstruction {
+        report(run, format!("  obstruction      : {obstruction}"))?;
+    }
+
+    report(
+        run,
+        format!("  preflight time   : {:.3} s", elapsed.as_secs_f64()),
+    )?;
+
+    Ok(())
 }
 
 fn report_factor(
