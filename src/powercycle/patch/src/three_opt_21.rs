@@ -408,11 +408,7 @@ pub fn greedy_three_opt_21(
 
     let mut moves = Vec::<ThreeOpt21Move>::new();
 
-    loop {
-        let Some(movement) = find_three_opt_21(graph, &current)? else {
-            break;
-        };
-
+    while let Some(movement) = find_three_opt_21(graph, &current)? {
         current = movement.apply(graph, &current)?;
 
         moves.push(movement);

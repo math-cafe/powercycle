@@ -57,7 +57,7 @@ else
 end
 
 step "clippy"
-if cargo clippy --workspace --all-targets --quiet
+if cargo clippy --workspace --all-targets --quiet -- -D warnings
     echo "    done"
 else
     record_failure clippy

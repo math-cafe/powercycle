@@ -411,40 +411,40 @@ impl RepairSearch<'_> {
          * We deliberately do not close it directly, because that would
          * merely rediscover an ordinary 2+1 move.
          */
-        if depth > 0 {
-            if let Some(closing_edge) = self.graph.edge_between(moving_deficit, fixed_deficit) {
-                if !self.factor.contains(closing_edge) && !added.contains(&closing_edge) {
-                    added.push(closing_edge);
+        if depth > 0
+            && let Some(closing_edge) = self.graph.edge_between(moving_deficit, fixed_deficit)
+            && !self.factor.contains(closing_edge)
+            && !added.contains(&closing_edge)
+        {
+            added.push(closing_edge);
 
-                    let candidate = AlternatingRepairMove::new(
-                        removed.clone(),
-                        added.clone(),
-                        depth,
-                        absorbed_vertices,
-                    );
+            let candidate = AlternatingRepairMove::new(
+                removed.clone(),
+                added.clone(),
+                depth,
+                absorbed_vertices,
+            );
 
-                    let validation = candidate.apply(self.graph, self.factor);
+            let validation = candidate.apply(self.graph, self.factor);
 
-                    added.pop();
+            added.pop();
 
-                    match validation {
-                        Ok(_) => {
-                            return Ok(Some(candidate));
-                        }
+            match validation {
+                Ok(_) => {
+                    return Ok(Some(candidate));
+                }
 
-                        Err(AlternatingRepairError::InvalidCycleReduction { .. })
-                        | Err(AlternatingRepairError::InvalidGiantGrowth { .. }) => {
-                            /*
-                             * The degree repair closes, but its topology
-                             * does not absorb exactly the intended
-                             * satellite. Continue searching.
-                             */
-                        }
+                Err(AlternatingRepairError::InvalidCycleReduction { .. })
+                | Err(AlternatingRepairError::InvalidGiantGrowth { .. }) => {
+                    /*
+                     * The degree repair closes, but its topology
+                     * does not absorb exactly the intended
+                     * satellite. Continue searching.
+                     */
+                }
 
-                        Err(error) => {
-                            return Err(error);
-                        }
-                    }
+                Err(error) => {
+                    return Err(error);
                 }
             }
         }

@@ -812,6 +812,9 @@ fn save_raw_dump(
     Ok(dump_id)
 }
 
+// Every parameter is a distinct input the dump record needs; grouping them
+// into a struct used at a single call site would not make this clearer.
+#[allow(clippy::too_many_arguments)]
 fn save_patched_dump(
     run: &RunContext,
     graph: &PowerGraph,

@@ -59,11 +59,7 @@ pub fn quick_degree_obstruction(
     let mut events = Vec::<(usize, isize)>::new();
     let mut base = 2u128;
 
-    loop {
-        let Some(power) = base.checked_pow(k) else {
-            break;
-        };
-
+    while let Some(power) = base.checked_pow(k) {
         if power > maximum_sum {
             break;
         }
@@ -778,7 +774,7 @@ mod tests {
             .map(|v| {
                 powers
                     .iter()
-                    .filter(|&&p| p >= v + 1 && p <= v + n && p != 2 * v)
+                    .filter(|&&p| p > v && p <= v + n && p != 2 * v)
                     .count()
             })
             .min()

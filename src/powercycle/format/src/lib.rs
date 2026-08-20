@@ -618,12 +618,12 @@ fn validate_edge_sequence(
             });
         }
 
-        if let Some(previous) = previous {
-            if edge_id <= previous {
-                return Err(FormatError::NonCanonicalEdgeSequence {
-                    context: context.to_owned(),
-                });
-            }
+        if let Some(previous) = previous
+            && edge_id <= previous
+        {
+            return Err(FormatError::NonCanonicalEdgeSequence {
+                context: context.to_owned(),
+            });
         }
 
         previous = Some(edge_id);
