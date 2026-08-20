@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 powercycle-config = { path = "src/powercycle/config" }
 powercycle-core = { path = "src/powercycle/core" }
+powercycle-patch = { path = "src/powercycle/patch" }
 powercycle-search = { path = "src/powercycle/search" }
 
 [[bin]]
@@ -41,3 +42,8 @@ members = [
 exclude = [
     "src/verify/rust",
 ]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

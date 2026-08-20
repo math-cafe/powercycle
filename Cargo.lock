@@ -414,6 +414,7 @@ version = "0.1.0"
 dependencies = [
  "powercycle-config",
  "powercycle-core",
+ "powercycle-patch",
  "powercycle-search",
 ]
 
@@ -442,6 +443,9 @@ dependencies = [
 [[package]]
 name = "powercycle-patch"
 version = "0.1.0"
+dependencies = [
+ "powercycle-core",
+]
 
 [[package]]
 name = "powercycle-search"

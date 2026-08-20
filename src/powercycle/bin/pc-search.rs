@@ -7,6 +7,8 @@ use powercycle_config::Config;
 
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 
+use powercycle_patch::{greedy_three_opt_21, greedy_three_opt_111};
+
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
 const DEFAULT_MAX_TOURS: u64 = 20;
@@ -40,7 +42,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     eprintln!("pc-search: directory {}", run.paths().root.display());
 
-    if let Err(error) = run_boundary_sec_loop(&mut run, problem) {
+    if let Err(error) = run_search(&mut run, problem) {
         let message = error.to_string();
 
         if let Err(mark_error) = run.mark_failed(&message) {
@@ -62,7 +64,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_boundary_sec_loop(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Error>> {
+fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Error>> {
     report(run, format!("building G_{}({})", problem.k, problem.n))?;
 
     let graph_start = Instant::now();
@@ -149,7 +151,22 @@ fn run_boundary_sec_loop(run: &mut RunContext, problem: Problem) -> Result<(), B
 
     report(run, format!("  max tours      : {}", problem.max_tours))?;
 
-    let mut records = SearchRecords::default();
+    report(run, "patchability analysis")?;
+
+    report(
+        run,
+        "  every SAT tour : alternating greedy 1+1+1 / 2+1 closure",
+    )?;
+
+    report(run, "  patch result   : dry-run only")?;
+
+    report(run, "  SEC source     : raw SAT factor")?;
+
+    report(run, "  records        : raw and patched tracked separately")?;
+
+    let mut raw_records = SearchRecords::default();
+
+    let mut patched_records = SearchRecords::default();
 
     let search_start = Instant::now();
 
@@ -174,16 +191,80 @@ fn run_boundary_sec_loop(run: &mut RunContext, problem: Problem) -> Result<(), B
             break;
         };
 
-        let decomposition = CycleDecomposition::new(&graph, &factor)?;
+        let raw_decomposition = CycleDecomposition::new(&graph, &factor)?;
 
         run.set_tour(tour)?;
 
-        report_factor(run, tour, &graph, &factor, &decomposition, solve_elapsed)?;
+        report_factor(
+            run,
+            tour,
+            &graph,
+            &factor,
+            &raw_decomposition,
+            solve_elapsed,
+        )?;
 
-        update_records(run, &mut records, tour, &decomposition)?;
+        update_records(run, "RAW", &mut raw_records, tour, &raw_decomposition)?;
 
-        if decomposition.is_hamiltonian() {
-            report(run, format!("tour {tour} is Hamiltonian"))?;
+        let patch_start = Instant::now();
+
+        report(run, format!("tour {tour} patch dry-run"))?;
+
+        let patch = patch_to_local_closure(run, &graph, &factor)?;
+
+        let patch_elapsed = patch_start.elapsed();
+
+        let patched_decomposition = CycleDecomposition::new(&graph, &patch.factor)?;
+
+        report(run, format!("tour {tour} patched factor"))?;
+
+        report(run, format!("  passes         : {}", patch.passes))?;
+
+        report(
+            run,
+            format!("  1+1+1 moves    : {}", patch.one_one_one_moves),
+        )?;
+
+        report(run, format!("  2+1 moves      : {}", patch.two_one_moves))?;
+
+        report(run, format!("  total moves    : {}", patch.total_moves()))?;
+
+        report(
+            run,
+            format!(
+                "  cycle reduction: {}",
+                raw_decomposition
+                    .cycle_count()
+                    .saturating_sub(patched_decomposition.cycle_count(),)
+            ),
+        )?;
+
+        report_decomposition(run, &patched_decomposition)?;
+
+        report(
+            run,
+            format!("  patch time     : {:.3} s", patch_elapsed.as_secs_f64()),
+        )?;
+
+        update_records(
+            run,
+            "PATCHED",
+            &mut patched_records,
+            tour,
+            &patched_decomposition,
+        )?;
+
+        if patched_decomposition.is_hamiltonian() {
+            report(run, format!("tour {tour} PATCHED FACTOR IS HAMILTONIAN"))?;
+
+            report(
+                run,
+                "  note           : dry-run factor is not yet persisted",
+            )?;
+        }
+
+        if raw_decomposition.is_hamiltonian() {
+            report(run, format!("tour {tour} raw SAT factor is Hamiltonian"))?;
 
             break;
         }
@@ -192,12 +273,25 @@ fn run_boundary_sec_loop(run: &mut RunContext, problem: Problem) -> Result<(), B
             break;
         }
 
-        report(run, format!("adding boundary SEC round {tour}"))?;
+        /*
+         * Important experimental invariant:
+         *
+         * SEC generation still uses the raw SAT factor.
+         *
+         * The patched factor is used only to measure patchability and
+         * establish patched records. This keeps the SAT/SEC dynamics
+         * unchanged while we compare the reconstructed search with the
+         * historical exploratory implementation.
+         */
+        report(
+            run,
+            format!("adding boundary SEC round {tour} from raw SAT factor"),
+        )?;
 
         let cut_start = Instant::now();
 
         let cut_stats =
-            solver.add_budgeted_boundary_subtour_cuts(&graph, &decomposition, budget)?;
+            solver.add_budgeted_boundary_subtour_cuts(&graph, &raw_decomposition, budget)?;
 
         let cut_elapsed = cut_start.elapsed();
 
@@ -280,33 +374,234 @@ fn run_boundary_sec_loop(run: &mut RunContext, problem: Problem) -> Result<(), B
         ),
     )?;
 
-    if let Some(record) = records.best_cycles {
-        report(
-            run,
-            format!(
-                "  best cycles    : {} at tour {} \
-                 (giant {}, residual {})",
-                record.cycles, record.tour, record.giant, record.residual
-            ),
-        )?;
-    }
+    report_record_summary(run, "RAW", &raw_records)?;
 
-    if let Some(record) = records.best_giant {
-        report(
-            run,
-            format!(
-                "  best giant     : {} at tour {} \
-                 ({} cycles, residual {})",
-                record.giant, record.tour, record.cycles, record.residual
-            ),
-        )?;
-    }
+    report_record_summary(run, "PATCHED", &patched_records)?;
 
     Ok(())
 }
 
+fn patch_to_local_closure(
+    run: &RunContext,
+    graph: &PowerGraph,
+    factor: &Factor,
+) -> Result<PatchClosureResult, Box<dyn Error>> {
+    let mut current = Factor::new(graph, factor.selected_edges().to_vec())?;
+
+    let mut pass = 1usize;
+
+    let mut total_111_moves = 0usize;
+
+    let mut total_21_moves = 0usize;
+
+    loop {
+        report(run, format!("patch pass {pass}"))?;
+
+        let one_one_one_start = Instant::now();
+
+        let one_one_one = greedy_three_opt_111(graph, &current)?;
+
+        let one_one_one_elapsed = one_one_one_start.elapsed();
+
+        let one_one_one_moves = one_one_one.move_count();
+
+        total_111_moves += one_one_one_moves;
+
+        current = one_one_one.into_factor();
+
+        let after_111 = CycleDecomposition::new(graph, &current)?;
+
+        report(
+            run,
+            format!(
+                "  1+1+1          : {} moves, {} cycles, \
+                 giant {}, residual {}, {:.3} s",
+                one_one_one_moves,
+                after_111.cycle_count(),
+                after_111.largest_cycle().len(),
+                after_111.residual_vertex_count(),
+                one_one_one_elapsed.as_secs_f64()
+            ),
+        )?;
+
+        if after_111.is_hamiltonian() {
+            return Ok(PatchClosureResult {
+                factor: current,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+            });
+        }
+
+        /*
+         * The previous 2+1 phase, if there was one, was exhaustive.
+         * If the next 1+1+1 phase cannot move, both operators are now
+         * simultaneously blocked.
+         */
+        if pass > 1 && one_one_one_moves == 0 {
+            report(run, "  closure        : fixed point after 1+1+1")?;
+
+            return Ok(PatchClosureResult {
+                factor: current,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+            });
+        }
+
+        let two_one_start = Instant::now();
+
+        let two_one = greedy_three_opt_21(graph, &current)?;
+
+        let two_one_elapsed = two_one_start.elapsed();
+
+        let two_one_moves = two_one.move_count();
+
+        total_21_moves += two_one_moves;
+
+        current = two_one.into_factor();
+
+        let after_21 = CycleDecomposition::new(graph, &current)?;
+
+        report(
+            run,
+            format!(
+                "  2+1            : {} moves, {} cycles, \
+                 giant {}, residual {}, {:.3} s",
+                two_one_moves,
+                after_21.cycle_count(),
+                after_21.largest_cycle().len(),
+                after_21.residual_vertex_count(),
+                two_one_elapsed.as_secs_f64()
+            ),
+        )?;
+
+        if after_21.is_hamiltonian() {
+            return Ok(PatchClosureResult {
+                factor: current,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+            });
+        }
+
+        if two_one_moves == 0 {
+            report(run, "  closure        : fixed point after 2+1")?;
+
+            return Ok(PatchClosureResult {
+                factor: current,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+            });
+        }
+
+        pass += 1;
+    }
+}
+
+fn report_factor(
+    run: &RunContext,
+    tour: u64,
+    graph: &PowerGraph,
+    factor: &Factor,
+    decomposition: &CycleDecomposition,
+    solve_elapsed: Duration,
+) -> Result<(), Box<dyn Error>> {
+    factor.validate_two_factor(graph)?;
+
+    report(run, format!("tour {tour} raw SAT factor"))?;
+
+    report(run, format!("  selected edges : {}", factor.edge_count()))?;
+
+    report_decomposition(run, decomposition)?;
+
+    report(
+        run,
+        format!("  SAT solve time : {:.3} s", solve_elapsed.as_secs_f64()),
+    )?;
+
+    Ok(())
+}
+
+fn report_decomposition(
+    run: &RunContext,
+    decomposition: &CycleDecomposition,
+) -> Result<(), Box<dyn Error>> {
+    let (satellite_count, min_satellite, max_satellite) = satellite_stats(decomposition);
+
+    report(
+        run,
+        format!("  cycles         : {}", decomposition.cycle_count()),
+    )?;
+
+    report(
+        run,
+        format!("  giant          : {}", decomposition.largest_cycle().len()),
+    )?;
+
+    report(run, format!("  satellites     : {}", satellite_count))?;
+
+    report(
+        run,
+        format!(
+            "  residual       : {}",
+            decomposition.residual_vertex_count()
+        ),
+    )?;
+
+    if let (Some(min_satellite), Some(max_satellite)) = (min_satellite, max_satellite) {
+        report(
+            run,
+            format!("  satellite size : {} .. {}", min_satellite, max_satellite),
+        )?;
+    }
+
+    report(
+        run,
+        format!("  hamiltonian    : {}", decomposition.is_hamiltonian()),
+    )?;
+
+    Ok(())
+}
+
+fn satellite_stats(decomposition: &CycleDecomposition) -> (usize, Option<usize>, Option<usize>) {
+    if decomposition.cycle_count() <= 1 {
+        return (0, None, None);
+    }
+
+    let largest_index = decomposition.largest_cycle_index();
+
+    let mut count = 0usize;
+
+    let mut minimum = usize::MAX;
+
+    let mut maximum = 0usize;
+
+    for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
+        if cycle_index == largest_index {
+            continue;
+        }
+
+        let size = cycle.len();
+
+        count += 1;
+
+        minimum = minimum.min(size);
+
+        maximum = maximum.max(size);
+    }
+
+    (
+        count,
+        (count > 0).then_some(minimum),
+        (count > 0).then_some(maximum),
+    )
+}
+
 fn update_records(
     run: &RunContext,
+    label: &str,
     records: &mut SearchRecords,
     tour: u64,
     decomposition: &CycleDecomposition,
@@ -324,6 +619,16 @@ fn update_records(
         residual,
     };
 
+    /*
+     * Primary record:
+     *
+     *   1. fewer cycles;
+     *   2. then fewer residual vertices.
+     *
+     * This is intentionally close to the patchability criterion used during
+     * the exploratory phase: a factor that closes to fewer cycles is more
+     * interesting even when its raw SAT decomposition looks worse.
+     */
     let cycle_record = match records.best_cycles {
         None => true,
 
@@ -338,7 +643,7 @@ fn update_records(
         report(
             run,
             format!(
-                "  NEW CYCLE RECORD: {} cycles, \
+                "  NEW {label} CYCLE RECORD: {} cycles, \
                  giant {}, residual {}",
                 cycles, giant, residual
             ),
@@ -359,7 +664,7 @@ fn update_records(
         report(
             run,
             format!(
-                "  NEW GIANT RECORD: {}, \
+                "  NEW {label} GIANT RECORD: {}, \
                  {} cycles, residual {}",
                 giant, cycles, residual
             ),
@@ -369,47 +674,38 @@ fn update_records(
     Ok(())
 }
 
-fn report_factor(
+fn report_record_summary(
     run: &RunContext,
-    tour: u64,
-    graph: &PowerGraph,
-    factor: &Factor,
-    decomposition: &CycleDecomposition,
-    solve_elapsed: Duration,
+    label: &str,
+    records: &SearchRecords,
 ) -> Result<(), Box<dyn Error>> {
-    factor.validate_two_factor(graph)?;
+    report(run, format!("{label} records"))?;
 
-    report(run, format!("tour {tour} 2-factor"))?;
+    if let Some(record) = records.best_cycles {
+        report(
+            run,
+            format!(
+                "  best cycles    : {} at tour {} \
+                 (giant {}, residual {})",
+                record.cycles, record.tour, record.giant, record.residual
+            ),
+        )?;
+    } else {
+        report(run, "  best cycles    : none")?;
+    }
 
-    report(run, format!("  selected edges : {}", factor.edge_count()))?;
-
-    report(
-        run,
-        format!("  cycles         : {}", decomposition.cycle_count()),
-    )?;
-
-    report(
-        run,
-        format!("  giant          : {}", decomposition.largest_cycle().len()),
-    )?;
-
-    report(
-        run,
-        format!(
-            "  residual       : {}",
-            decomposition.residual_vertex_count()
-        ),
-    )?;
-
-    report(
-        run,
-        format!("  hamiltonian    : {}", decomposition.is_hamiltonian()),
-    )?;
-
-    report(
-        run,
-        format!("  SAT solve time : {:.3} s", solve_elapsed.as_secs_f64()),
-    )?;
+    if let Some(record) = records.best_giant {
+        report(
+            run,
+            format!(
+                "  best giant     : {} at tour {} \
+                 ({} cycles, residual {})",
+                record.giant, record.tour, record.cycles, record.residual
+            ),
+        )?;
+    } else {
+        report(run, "  best giant     : none")?;
+    }
 
     Ok(())
 }
@@ -422,6 +718,21 @@ fn report(run: &RunContext, message: impl AsRef<str>) -> Result<(), Box<dyn Erro
     run.log_info(message)?;
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct PatchClosureResult {
+    factor: Factor,
+    passes: usize,
+    one_one_one_moves: usize,
+    two_one_moves: usize,
+}
+
+impl PatchClosureResult {
+    #[must_use]
+    const fn total_moves(&self) -> usize {
+        self.one_one_one_moves + self.two_one_moves
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
