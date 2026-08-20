@@ -1,5 +1,3 @@
-mod pc_search_preflight;
-
 use std::error::Error;
 use std::fmt;
 use std::process::ExitCode;
@@ -7,12 +5,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use pc_search_preflight::{PreflightReport, hamiltonian_preflight};
-
 use powercycle_config::Config;
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 use powercycle_format::{Dump, MoveRecord, Provenance};
 use powercycle_patch::{find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111};
+use powercycle_search::preflight::{PreflightReport, hamiltonian_preflight};
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
 const DEFAULT_MAX_TOURS: u64 = 20;
