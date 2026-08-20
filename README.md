@@ -93,6 +93,19 @@ See [`doc/en/algorithms.md`](doc/en/algorithms.md) for the algorithms,
 [`doc/en/architecture.md`](doc/en/architecture.md) for the crate layout and
 [`doc/en/dump-format.md`](doc/en/dump-format.md) for the exchange format.
 
+## Development
+
+```console
+cargo test --workspace              # fast suite
+cargo test --release -- --ignored   # long cross-checks, about a minute
+./scripts/check.fish                # everything, plus re-verification of
+                                    # every committed witness
+```
+
+`scripts/check.fish` is the pre-publication gate: formatting, lints, tests,
+release build, then for each bundle in `witness/` it re-derives the checksums,
+runs both independent verifiers and replays the lower-bound certificate.
+
 ## Licence
 
 Source code is dual-licensed [MIT](LICENSE-MIT) OR

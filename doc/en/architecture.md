@@ -338,7 +338,16 @@ present rather than overwriting it silently.
 `witness/` is released under CC0; the rest of the repository is dual-licensed
 MIT OR Apache-2.0.
 
-## 10. Documentation policy
+## 10. Pre-publication check
+
+`scripts/check.fish` runs formatting, lints, the test suite, the long
+cross-checks and a release build, then re-derives every claim in `witness/`:
+checksums, both independent verifiers, and a byte-for-byte replay of each
+lower-bound certificate.
+
+It is the single command to run before publishing a result.
+
+## 11. Documentation policy
 
 English documentation is authoritative during active development.
 
