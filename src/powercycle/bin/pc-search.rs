@@ -10,7 +10,7 @@ use powercycle_patch::{find_alternating_repair, greedy_three_opt_21, greedy_thre
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
 const DEFAULT_MAX_TOURS: u64 = 20;
-const ALTERNATING_REPAIR_MAX_DEPTH: usize = 3;
+const ALTERNATING_REPAIR_MAX_DEPTH: usize = 4;
 
 fn main() -> ExitCode {
     match run() {
