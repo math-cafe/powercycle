@@ -756,10 +756,158 @@ fn find_forced_cycle(
 mod tests {
     use super::*;
 
+    /// Minimum degree of G_k(n), counted directly from the definition.
+    ///
+    /// Deliberately independent of the sweep in `quick_degree_obstruction`:
+    /// it walks every vertex and counts the powers landing in its window,
+    /// so a shared mistake in the interval arithmetic cannot hide.
+    fn naive_min_degree(k: u32, n: usize) -> usize {
+        let mut powers = Vec::new();
+        let mut base = 2usize;
+
+        while let Some(power) = base.checked_pow(k) {
+            if power > 2 * n {
+                break;
+            }
+
+            powers.push(power);
+            base += 1;
+        }
+
+        (1..=n)
+            .map(|v| {
+                powers
+                    .iter()
+                    .filter(|&&p| p >= v + 1 && p <= v + n && p != 2 * v)
+                    .count()
+            })
+            .min()
+            .unwrap_or(0)
+    }
+
+    fn check_naive_agreement(k: u32, n: usize) {
+        let quick = quick_degree_obstruction(k, n).unwrap();
+
+        assert_eq!(
+            quick.is_some(),
+            naive_min_degree(k, n) < 2,
+            "sweep/naive disagreement for G_{k}({n})"
+        );
+    }
+
+    #[test]
+    fn quick_degree_check_matches_naive_count() {
+        for k in 2..=8 {
+            for n in 3..=400 {
+                check_naive_agreement(k, n);
+            }
+        }
+    }
+
+    /// The same comparison over a much wider range.
+    ///
+    /// Excluded from the default suite for runtime; run it with
+    /// `cargo test -- --ignored` before publishing a result.
+    #[test]
+    #[ignore = "slow: run explicitly before publishing"]
+    fn quick_degree_check_matches_naive_count_exhaustive() {
+        for k in 2..=10 {
+            for n in 3..=4_000 {
+                check_naive_agreement(k, n);
+            }
+        }
+    }
+
+    /// The sweep's interval arithmetic is at its most fragile next to a
+    /// power and next to the self-loop position it excludes.
+    #[test]
+    fn quick_degree_check_matches_around_power_boundaries() {
+        check_power_boundaries(1_200);
+    }
+
+    /// Same probe, far beyond the default budget.
+    #[test]
+    #[ignore = "slow: run explicitly before publishing"]
+    fn quick_degree_check_matches_around_power_boundaries_exhaustive() {
+        check_power_boundaries(200_000);
+    }
+
+    fn check_power_boundaries(limit: usize) {
+        for k in 2..=8 {
+            let mut base = 2usize;
+
+            while let Some(power) = base.checked_pow(k) {
+                if power > limit {
+                    break;
+                }
+
+                for anchor in [power / 2, power] {
+                    for delta in -2i64..=2 {
+                        let Ok(n) = usize::try_from(anchor as i64 + delta) else {
+                            continue;
+                        };
+
+                        if n < 3 {
+                            continue;
+                        }
+
+                        check_naive_agreement(k, n);
+                    }
+                }
+
+                base += 1;
+            }
+        }
+    }
+
+    /// Locks the lower-bound half of the published results.
+    ///
+    /// Each threshold is the first n whose minimum degree reaches two, and
+    /// equals (m+1)^k - m^k/2 for the even m whose self-loop position is
+    /// the last vertex left at degree one.
+    #[test]
+    fn reproduces_published_minimality_thresholds() {
+        let cases = [
+            (2u32, 31usize, 6usize),
+            (3, 473, 8),
+            (4, 9_641, 10),
+            (5, 246_877, 12),
+            (6, 15_748_961, 16),
+            (7, 587_761_723, 18),
+        ];
+
+        for (k, threshold, m) in cases {
+            assert_eq!(
+                threshold,
+                (m + 1).pow(k) - m.pow(k) / 2,
+                "closed form disagrees for k={k}"
+            );
+
+            assert_eq!(
+                quick_degree_obstruction(k, threshold).unwrap(),
+                None,
+                "G_{k}({threshold}) should clear the degree condition"
+            );
+
+            let below = quick_degree_obstruction(k, threshold - 1)
+                .unwrap()
+                .expect("the value below the threshold must be obstructed");
+
+            assert_eq!(
+                below,
+                DegreeObstruction {
+                    vertex: m.pow(k) / 2,
+                    degree: 1,
+                },
+                "unexpected binding vertex for k={k}"
+            );
+        }
+    }
+
     #[test]
     fn quick_degree_check_matches_constructed_graphs() {
-        for k in 2..=5 {
-            for n in 3..=100 {
+        for k in 2..=8 {
+            for n in 3..=300 {
                 let graph = PowerGraph::new(k, n).unwrap();
 
                 let quick = quick_degree_obstruction(k, n).unwrap();

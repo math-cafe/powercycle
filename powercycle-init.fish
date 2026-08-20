@@ -19,6 +19,9 @@ mkdir -p "$POWERCYCLE_ROOT/data/runs"
 mkdir -p "$POWERCYCLE_ROOT/data/dumps"
 mkdir -p "$POWERCYCLE_ROOT/data/certificates"
 
+# bin/ is for hand-placed symlinks; target/release is where cargo puts the
+# tools that README.md tells you to build.
+fish_add_path --prepend "$POWERCYCLE_ROOT/target/release"
 fish_add_path --prepend "$POWERCYCLE_ROOT/bin"
 
 echo "powercycle environment"
@@ -26,3 +29,4 @@ echo "  root   : $POWERCYCLE_ROOT"
 echo "  config : $POWERCYCLE_CONFIG"
 echo "  local  : $POWERCYCLE_LOCAL_CONFIG"
 echo "  bin    : $POWERCYCLE_ROOT/bin"
+echo "  tools  : $POWERCYCLE_ROOT/target/release"
