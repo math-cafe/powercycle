@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+ctrlc = "3.5.2"
 powercycle-config = { path = "src/powercycle/config" }
 powercycle-core = { path = "src/powercycle/core" }
 powercycle-format = { version = "0.1.0", path = "src/powercycle/format" }

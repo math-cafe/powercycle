@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::fmt;
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use powercycle_config::Config;
@@ -23,12 +25,47 @@ fn main() -> ExitCode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SearchOutcome {
+    Completed,
+    Interrupted,
+}
+
+fn install_interrupt_handler(interrupt_requested: Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
+    let signal_count = Arc::new(AtomicUsize::new(0));
+
+    let signal_count_handler = Arc::clone(&signal_count);
+
+    ctrlc::set_handler(move || {
+        let previous = signal_count_handler.fetch_add(1, Ordering::SeqCst);
+
+        if previous == 0 {
+            interrupt_requested.store(true, Ordering::SeqCst);
+
+            eprintln!(
+                "pc-search: Ctrl-C: graceful stop requested; \
+                 press Ctrl-C again to force exit"
+            );
+        } else {
+            eprintln!("pc-search: Ctrl-C: forcing immediate exit");
+
+            std::process::exit(130);
+        }
+    })?;
+
+    Ok(())
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let invocation = Invocation::capture()?;
     let problem = parse_problem(&invocation.argv)?;
     let config = Config::load()?;
 
     let program = ProgramInfo::new("pc-search", env!("CARGO_PKG_VERSION"));
+
+    let interrupt_requested = Arc::new(AtomicBool::new(false));
+
+    install_interrupt_handler(Arc::clone(&interrupt_requested))?;
 
     eprintln!("pc-search: creating run for G_{}({})", problem.k, problem.n);
 
@@ -38,29 +75,50 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     eprintln!("pc-search: directory {}", run.paths().root.display());
 
-    if let Err(error) = run_search(&mut run, problem) {
-        let message = error.to_string();
+    let outcome = match run_search(&mut run, problem, Arc::clone(&interrupt_requested)) {
+        Ok(outcome) => outcome,
 
-        if let Err(mark_error) = run.mark_failed(&message) {
-            eprintln!(
-                "pc-search: additionally failed to mark run as failed: \
-                 {mark_error}"
-            );
+        Err(error) => {
+            let message = error.to_string();
+
+            if let Err(mark_error) = run.mark_failed(&message) {
+                eprintln!(
+                    "pc-search: additionally failed to mark run as failed: \
+                     {mark_error}"
+                );
+            }
+
+            return Err(error);
         }
+    };
 
-        return Err(error);
-    }
-
+    /*
+     * RunContext currently exposes completed/failed lifecycle states only.
+     * A graceful Ctrl-C is a clean search termination, not a failure, so the
+     * run is finalized normally while the log records the interrupted outcome.
+     */
     run.mark_completed()?;
 
-    eprintln!("pc-search: completed");
+    match outcome {
+        SearchOutcome::Completed => {
+            eprintln!("pc-search: completed");
+        }
+
+        SearchOutcome::Interrupted => {
+            eprintln!("pc-search: interrupted");
+        }
+    }
 
     println!("{}", run.paths().root.display());
 
     Ok(())
 }
 
-fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Error>> {
+fn run_search(
+    run: &mut RunContext,
+    problem: Problem,
+    interrupt_requested: Arc<AtomicBool>,
+) -> Result<SearchOutcome, Box<dyn Error>> {
     report(run, format!("building G_{}({})", problem.k, problem.n))?;
 
     let graph_start = Instant::now();
@@ -162,6 +220,8 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
         format!("  on Hamiltonian : {}", problem.hamiltonian_policy),
     )?;
 
+    report(run, "  Ctrl-C         : first graceful, second forced")?;
+
     report(run, "patchability analysis")?;
 
     report(run, format!("  mode           : {}", problem.patch_mode))?;
@@ -230,13 +290,42 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
     let mut patched_records = SearchRecords::default();
 
     let search_start = Instant::now();
+    let mut outcome = SearchOutcome::Completed;
 
     for tour in 1u64.. {
+        if interrupt_requested.load(Ordering::SeqCst) {
+            report(run, "graceful stop requested before next SAT tour")?;
+
+            outcome = SearchOutcome::Interrupted;
+            break;
+        }
+
         report(run, format!("solving tour {tour}"))?;
 
         let solve_start = Instant::now();
 
-        let factor = solver.solve(&graph)?;
+        let factor = match solver.solve(&graph) {
+            Ok(factor) => factor,
+
+            Err(_) if interrupt_requested.load(Ordering::SeqCst) => {
+                let solve_elapsed = solve_start.elapsed();
+
+                report(
+                    run,
+                    format!(
+                        "SAT solve interrupted at tour {tour} after {:.3} s",
+                        solve_elapsed.as_secs_f64()
+                    ),
+                )?;
+
+                outcome = SearchOutcome::Interrupted;
+                break;
+            }
+
+            Err(error) => {
+                return Err(Box::new(error));
+            }
+        };
 
         let solve_elapsed = solve_start.elapsed();
 
@@ -472,6 +561,22 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             report(run, format!("tour {tour} raw SAT factor is Hamiltonian"))?;
         }
 
+        /*
+         * If Ctrl-C arrived after CaDiCaL returned a model, finish the
+         * current tour first: patching, record updates and requested dumps
+         * above are all completed before stopping. SEC generation belongs to
+         * the next SAT tour, so it is intentionally skipped here.
+         */
+        if interrupt_requested.load(Ordering::SeqCst) {
+            report(
+                run,
+                format!("graceful stop requested after completing tour {tour}"),
+            )?;
+
+            outcome = SearchOutcome::Interrupted;
+            break;
+        }
+
         if (patched_hamiltonian || raw_hamiltonian)
             && problem.hamiltonian_policy == HamiltonianPolicy::Stop
         {
@@ -602,6 +707,16 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
             format!("  build time     : {:.3} s", cut_elapsed.as_secs_f64()),
         )?;
 
+        if interrupt_requested.load(Ordering::SeqCst) {
+            report(
+                run,
+                format!("graceful stop requested after SEC round {tour}"),
+            )?;
+
+            outcome = SearchOutcome::Interrupted;
+            break;
+        }
+
         if cut_stats.added_clauses == 0 {
             report(run, "no boundary SEC fitted the round budget")?;
 
@@ -623,7 +738,18 @@ fn run_search(run: &mut RunContext, problem: Problem) -> Result<(), Box<dyn Erro
 
     report_record_summary(run, "PATCHED", &patched_records)?;
 
-    Ok(())
+    report(
+        run,
+        format!(
+            "  outcome        : {}",
+            match outcome {
+                SearchOutcome::Completed => "completed",
+                SearchOutcome::Interrupted => "interrupted",
+            }
+        ),
+    )?;
+
+    Ok(outcome)
 }
 
 fn save_raw_dump(

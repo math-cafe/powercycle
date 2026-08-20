@@ -3,9 +3,12 @@ use std::fmt;
 
 use powercycle_core::{CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
 
-use rustsat::solvers::{Solve, SolverResult};
+use rustsat::solvers::{ControlSignal, Solve, SolverResult, Terminate};
 use rustsat::types::{Clause, Lit, TernaryVal, Var};
 use rustsat_cadical::CaDiCaL;
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Statistics describing the base SAT model.
 ///
@@ -238,6 +241,22 @@ impl SatFactorSolver {
     #[must_use]
     pub fn solver_signature(&self) -> &'static str {
         self.solver.signature()
+    }
+
+    /// Attaches a cooperative interruption flag to CaDiCaL.
+    ///
+    /// When the flag becomes true, the solver terminator asks CaDiCaL to
+    /// return `SolverResult::Interrupted` at the next termination check.
+    ///
+    /// The flag is shared with the command-line Ctrl-C handler.
+    pub fn attach_interrupt_flag(&mut self, interrupt_requested: Arc<AtomicBool>) {
+        self.solver.attach_terminator(move || {
+            if interrupt_requested.load(Ordering::SeqCst) {
+                ControlSignal::Terminate
+            } else {
+                ControlSignal::Continue
+            }
+        });
     }
 
     /// Solves the current SAT formula and returns one valid 2-factor.
