@@ -17,6 +17,11 @@ première ligne, est une puissance cinquième parfaite.
 Ce témoin prouve donc l'existence d'un cycle hamiltonien pour `n = 490463`. À lui
 seul, il ne prouve **pas** que `490463` est minimal.
 
+> **Ce n'est pas le témoin minimal pour `k = 5`.** Le résultat de référence est
+> `n_min(5) = 246877`, porté par `witness/k5-n246877/`. Le présent bundle est
+> conservé parce qu'il reste valide et vérifié de façon indépendante, et parce
+> qu'il documente la progression de la recherche.
+
 ## Identité canonique du témoin
 
 Le fichier `cycle.txt` non compressé a pour SHA-256 :

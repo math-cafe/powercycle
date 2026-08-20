@@ -16,6 +16,11 @@ the last line back to the first, has a sum equal to a perfect fifth power.
 This witness proves the existence of a Hamiltonian cycle at `n = 490463`. By
 itself, it does **not** prove that `490463` is minimal.
 
+> **This is not the minimal witness for `k = 5`.** The reference result is
+> `n_min(5) = 246877`, carried by `witness/k5-n246877/`. The present bundle is
+> kept because it remains valid and independently verified, and because it
+> records how the search progressed.
+
 ## Canonical witness identity
 
 The uncompressed `cycle.txt` has SHA-256:
