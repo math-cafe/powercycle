@@ -1,0 +1,104 @@
+# Témoin powercycle : k = 3, n = 473
+
+Ce répertoire contient le témoin hamiltonien **minimal**, conservé et versionné,
+pour le graphe de sommes de puissances `G_3(473)`.
+
+## Énoncé mathématique
+
+Le graphe a pour sommets `1, 2, ..., 473`. Deux sommets distincts `a` et `b` sont
+adjacents exactement lorsque `a + b` est une puissance parfaite d'exposant 3.
+
+`cycle.txt.zst` se décompresse en un fichier texte simple, un sommet par ligne.
+Chaque entier de `1` à `473` apparaît exactement une fois, et chaque paire de
+sommets consécutifs, y compris la paire de fermeture entre la dernière et la
+première ligne, somme à une puissance parfaite d'exposant 3.
+
+## Minimalité
+
+Ce bundle porte les deux moitiés de
+
+```text
+n_min(3) = 473
+```
+
+**L'existence** est `cycle.txt`.
+
+**La borne inférieure** est `scan.txt` : pour tout `n` dans `[1, 472]`, le
+graphe `G_3(n)` possède un sommet de degré au plus un, qu'aucun cycle
+hamiltonien ne peut emprunter. Le sommet contraignant juste sous le seuil est
+
+```text
+v = 256 = 8^3 / 2
+```
+
+la position de boucle de `8^3`, qui reste de degré un jusqu'à ce que `9^3`
+entre dans sa fenêtre, à
+
+```text
+n = 9^3 - 8^3/2 = 729 - 256 = 473
+```
+
+La condition de degré est nécessaire et **non** suffisante : cet argument seul ne
+peut donc pas trancher `n_min` pour tout exposant. Voir
+[`../k5-n246877/README.fr.md`](../k5-n246877/README.fr.md) pour la discussion
+générale et pour le cas `k = 2`, où la borne analogue vaut `31` alors que le
+minimum réel est `32`.
+
+## Checksums
+
+Des artefacts **non compressés** :
+
+```text
+cycle.txt          2638ac29ca8b0463836d96fac7c1eadda2638ceda07f20200b49db9b341d824f
+scan.txt           e8b3af39bd91954eb994811f83ed0c862db53690c680275deaf7a396a530aaf0
+final.pcdump.json  366314d4cc03ce77601a76fd4011ef63c79c679316992dafcb205cadb76c27d1
+```
+
+Le cycle est exporté sous forme canonique : rotation plaçant le sommet `1` en
+premier, orientation plaçant le plus petit voisin de `1` en second. Il commence
+par `1, 63, ...`, se termine par `342`, et se ferme sur
+`342 + 1 = 343 = 7^3`.
+
+`scan.txt` est la sortie de `pc-scan` pour `n = 1 .. 473` : les `472` premières
+lignes portent le verdict `IMPOSSIBLE` avec le sommet fautif et son degré, la
+dernière porte le verdict `CANDIDATE` à `473`.
+
+## Provenance
+
+Le dump final `final.pcdump.json.zst` a pour identifiant sémantique `bdb9fcc35ded…`.
+
+- le tour SAT 1 produit un 2-facteur brut de 7 cycles, avec un géant de taille 204 et un résiduel de 269 sommets ;
+- deux mouvements gloutons `three-opt-111` le ramènent à 3 cycles, avec un géant de taille 441 ;
+- deux mouvements gloutons `three-opt-21` absorbent les satellites restants en un cycle unique de longueur 473.
+
+La durée totale de la recherche est de 0.001 seconde(s).
+
+Le dump final est un artefact de provenance. Le certificat mathématique est le
+cycle texte lui-même.
+
+## Vérification indépendante
+
+```console
+zstd -dc witness/k3-n473/cycle.txt.zst > /tmp/powercycle-cycle.txt
+sha256sum /tmp/powercycle-cycle.txt
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  -- 3 473 /tmp/powercycle-cycle.txt
+
+python src/verify/python/verify-cycle.py 3 473 /tmp/powercycle-cycle.txt
+```
+
+La borne inférieure se rejoue avec :
+
+```console
+zstd -dc witness/k3-n473/scan.txt.zst > /tmp/powercycle-scan.txt
+cargo run --release --bin pc-scan -- 3 1 473 | diff - /tmp/powercycle-scan.txt
+```
+
+Les deux vérificateurs sont indépendants des bibliothèques powercycle : ils
+n'utilisent que `k`, `n` et le témoin candidat.
+
+## Licence
+
+Le contenu de ce répertoire est placé sous CC0 1.0 Universal. Voir
+[`../LICENSE`](../LICENSE).
