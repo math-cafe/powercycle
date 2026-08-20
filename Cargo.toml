@@ -32,6 +32,10 @@ path = "src/powercycle/bin/pc-patch.rs"
 name = "pc-export"
 path = "src/powercycle/bin/pc-export.rs"
 
+[[bin]]
+name = "pc-scan"
+path = "src/powercycle/bin/pc-scan.rs"
+
 [workspace]
 resolver = "3"
 members = [
