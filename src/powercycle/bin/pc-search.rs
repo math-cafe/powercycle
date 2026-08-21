@@ -2265,7 +2265,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn parses_no_patch() {
         assert_eq!(
             parse_problem(&args(&["--no-patch", "6", "15748961", "1"])),
@@ -2299,6 +2298,7 @@ mod tests {
         assert!(parse_problem(&args(&["--checkpoint-secs=x", "5", "31"])).is_err());
     }
 
+    #[test]
     fn parses_probe_only_before_problem() {
         assert_eq!(
             parse_problem(&args(&["--probe-only", "5", "490463", "100",],)),

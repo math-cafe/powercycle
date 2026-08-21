@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use powercycle_core::{CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
+use powercycle_core::{Cycle, CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
 
 /// A 3-opt `2+1` move.
 ///
@@ -223,54 +223,99 @@ impl GreedyThreeOpt21Result {
 /// Searching from satellites is especially efficient once a large giant has
 /// formed, because the work is then driven primarily by the residual vertex
 /// set rather than by the size of the giant.
-pub fn find_three_opt_21(
-    graph: &PowerGraph,
-    factor: &Factor,
-) -> Result<Option<ThreeOpt21Move>, ThreeOpt21Error> {
-    factor
-        .validate_two_factor(graph)
-        .map_err(ThreeOpt21Error::Factor)?;
+/// State shared by every candidate search over one decomposition.
+///
+/// Building it costs a decomposition and a few vertex-sized arrays, which is
+/// why the batch search reuses a single instance across all satellites rather
+/// than rebuilding one per move.
+struct Scan<'a> {
+    graph: &'a PowerGraph,
+    factor: &'a Factor,
+    largest_cycle_index: usize,
+    cycle_of: Vec<usize>,
+    selected_neighbors: Vec<Option<[Vertex; 2]>>,
+    giant_position: Vec<usize>,
+    giant_length: usize,
+}
 
-    let decomposition =
-        CycleDecomposition::new(graph, factor).map_err(|error| ThreeOpt21Error::Decomposition {
-            operation: "decompose factor",
-            message: error.to_string(),
-        })?;
+impl<'a> Scan<'a> {
+    fn new(graph: &'a PowerGraph, factor: &'a Factor, decomposition: &CycleDecomposition) -> Self {
+        let largest_cycle_index = decomposition.largest_cycle_index();
 
-    if decomposition.cycle_count() < 2 {
-        return Ok(None);
-    }
+        let mut cycle_of = vec![usize::MAX; graph.vertex_count()];
 
-    let largest_cycle_index = decomposition.largest_cycle_index();
+        let mut selected_neighbors = vec![None; graph.vertex_count()];
 
-    let mut cycle_of = vec![usize::MAX; graph.vertex_count()];
+        for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
+            let vertices = cycle.vertices();
 
-    let mut selected_neighbors = vec![None; graph.vertex_count()];
+            for index in 0..vertices.len() {
+                let vertex = vertices[index];
 
-    for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
-        let vertices = cycle.vertices();
+                let previous = vertices[if index == 0 {
+                    vertices.len() - 1
+                } else {
+                    index - 1
+                }];
 
-        for index in 0..vertices.len() {
-            let vertex = vertices[index];
+                let next = vertices[(index + 1) % vertices.len()];
 
-            let previous = vertices[if index == 0 {
-                vertices.len() - 1
-            } else {
-                index - 1
-            }];
+                cycle_of[vertex.index()] = cycle_index;
 
-            let next = vertices[(index + 1) % vertices.len()];
+                selected_neighbors[vertex.index()] = Some([previous, next]);
+            }
+        }
 
-            cycle_of[vertex.index()] = cycle_index;
+        /*
+         * Position of every giant vertex along the giant cycle.
+         *
+         * A candidate removes two giant edges, cutting the giant into two
+         * arcs, and adds three. Whether those reconnect everything into one
+         * cycle depends only on how the two removed edges are oriented
+         * relative to each other: consistently oriented, the satellite path
+         * bridges one arc while the third added edge closes the other;
+         * oppositely oriented, that third edge closes one arc on itself and
+         * two cycles remain.
+         *
+         * Validity is therefore an O(1) test rather than a full apply.
+         */
+        let giant_vertices = decomposition.largest_cycle().vertices();
 
-            selected_neighbors[vertex.index()] = Some([previous, next]);
+        let mut giant_position = vec![usize::MAX; graph.vertex_count()];
+
+        for (position, vertex) in giant_vertices.iter().enumerate() {
+            giant_position[vertex.index()] = position;
+        }
+
+        Self {
+            graph,
+            factor,
+            largest_cycle_index,
+            cycle_of,
+            selected_neighbors,
+            giant_position,
+            giant_length: giant_vertices.len(),
         }
     }
 
-    for (satellite_index, satellite) in decomposition.cycles().iter().enumerate() {
-        if satellite_index == largest_cycle_index {
-            continue;
-        }
+    fn follows(&self, from: Vertex, to: Vertex) -> bool {
+        (self.giant_position[from.index()] + 1) % self.giant_length
+            == self.giant_position[to.index()]
+    }
+
+    /// First valid move absorbing `satellite`, in deterministic order.
+    ///
+    /// `reserved`, when supplied, marks giant vertices already claimed by
+    /// moves chosen earlier in the same batch.
+    fn first_move_for(
+        &self,
+        satellite: &Cycle,
+        reserved: Option<&[bool]>,
+    ) -> Result<Option<ThreeOpt21Move>, ThreeOpt21Error> {
+        let graph = self.graph;
+        let factor = self.factor;
+
+        let claimed = |vertex: Vertex| reserved.is_some_and(|taken| taken[vertex.index()]);
 
         let vertices = satellite.vertices();
 
@@ -293,11 +338,13 @@ pub fn find_three_opt_21(
 
                     let giant_left = other_vertex(graph, added_left, satellite_left)?;
 
-                    if cycle_of[giant_left.index()] != largest_cycle_index {
+                    if self.cycle_of[giant_left.index()] != self.largest_cycle_index
+                        || claimed(giant_left)
+                    {
                         continue;
                     }
 
-                    let giant_left_neighbors = selected_neighbors[giant_left.index()]
+                    let giant_left_neighbors = self.selected_neighbors[giant_left.index()]
                         .expect("giant vertex must have two selected neighbours");
 
                     let incident_right = graph
@@ -311,7 +358,9 @@ pub fn find_three_opt_21(
 
                         let giant_right = other_vertex(graph, added_right, satellite_right)?;
 
-                        if cycle_of[giant_right.index()] != largest_cycle_index {
+                        if self.cycle_of[giant_right.index()] != self.largest_cycle_index
+                            || claimed(giant_right)
+                        {
                             continue;
                         }
 
@@ -319,13 +368,21 @@ pub fn find_three_opt_21(
                             continue;
                         }
 
-                        let giant_right_neighbors = selected_neighbors[giant_right.index()]
+                        let giant_right_neighbors = self.selected_neighbors[giant_right.index()]
                             .expect("giant vertex must have two selected neighbours");
 
                         for giant_left_other in giant_left_neighbors {
+                            if claimed(giant_left_other) {
+                                continue;
+                            }
+
                             let removed_left = required_edge(graph, giant_left, giant_left_other)?;
 
                             for giant_right_other in giant_right_neighbors {
+                                if claimed(giant_right_other) {
+                                    continue;
+                                }
+
                                 let removed_right =
                                     required_edge(graph, giant_right, giant_right_other)?;
 
@@ -348,36 +405,124 @@ pub fn find_three_opt_21(
                                     continue;
                                 }
 
+                                if self.follows(giant_left, giant_left_other)
+                                    != self.follows(giant_right, giant_right_other)
+                                {
+                                    // Opposite orientations: the toggle keeps
+                                    // degree two but leaves two cycles.
+                                    continue;
+                                }
+
                                 let candidate = ThreeOpt21Move::new(
                                     [removed_left, removed_right, removed_satellite],
                                     [added_left, added_right, added_giant],
                                 );
 
-                                match candidate.apply(graph, factor) {
-                                    Ok(_) => {
-                                        return Ok(Some(candidate));
-                                    }
+                                debug_assert!(
+                                    reserved.is_some() || candidate.apply(graph, factor).is_ok(),
+                                    "orientation test disagrees with a full apply"
+                                );
 
-                                    Err(ThreeOpt21Error::InvalidCycleReduction { .. }) => {
-                                        // The toggle preserves degree two
-                                        // but reconnects the two touched
-                                        // cycles into two cycles again.
-                                        // Continue searching.
-                                    }
-
-                                    Err(error) => {
-                                        return Err(error);
-                                    }
-                                }
+                                return Ok(Some(candidate));
                             }
                         }
                     }
                 }
             }
         }
+
+        Ok(None)
+    }
+}
+
+pub fn find_three_opt_21(
+    graph: &PowerGraph,
+    factor: &Factor,
+) -> Result<Option<ThreeOpt21Move>, ThreeOpt21Error> {
+    factor
+        .validate_two_factor(graph)
+        .map_err(ThreeOpt21Error::Factor)?;
+
+    let decomposition =
+        CycleDecomposition::new(graph, factor).map_err(|error| ThreeOpt21Error::Decomposition {
+            operation: "decompose factor",
+            message: error.to_string(),
+        })?;
+
+    if decomposition.cycle_count() < 2 {
+        return Ok(None);
+    }
+
+    let scan = Scan::new(graph, factor, &decomposition);
+
+    for (satellite_index, satellite) in decomposition.cycles().iter().enumerate() {
+        if satellite_index == scan.largest_cycle_index {
+            continue;
+        }
+
+        if let Some(movement) = scan.first_move_for(satellite, None)? {
+            return Ok(Some(movement));
+        }
     }
 
     Ok(None)
+}
+
+/// Finds pairwise independent 2+1 moves in a single scan.
+///
+/// Two moves are independent when the giant vertices they touch are disjoint,
+/// so neither disturbs the arcs the other relies on. Applying such a set costs
+/// one factor rebuild instead of one per move, which is the difference between
+/// minutes and days once the giant has tens of millions of edges.
+fn find_three_opt_21_batch(
+    graph: &PowerGraph,
+    factor: &Factor,
+    stop: &dyn Fn() -> bool,
+) -> Result<Vec<ThreeOpt21Move>, ThreeOpt21Error> {
+    let decomposition =
+        CycleDecomposition::new(graph, factor).map_err(|error| ThreeOpt21Error::Decomposition {
+            operation: "decompose factor",
+            message: error.to_string(),
+        })?;
+
+    if decomposition.cycle_count() < 2 {
+        return Ok(Vec::new());
+    }
+
+    let scan = Scan::new(graph, factor, &decomposition);
+
+    let mut reserved = vec![false; graph.vertex_count()];
+
+    let mut moves = Vec::new();
+
+    for (satellite_index, satellite) in decomposition.cycles().iter().enumerate() {
+        if satellite_index == scan.largest_cycle_index {
+            continue;
+        }
+
+        if stop() {
+            break;
+        }
+
+        let Some(movement) = scan.first_move_for(satellite, Some(&reserved))? else {
+            continue;
+        };
+
+        for &edge_id in movement.removed() {
+            let edge = graph
+                .edge(edge_id)
+                .expect("a move edge must belong to the graph");
+
+            let (first, second) = edge.endpoints();
+
+            reserved[first.index()] = true;
+            reserved[second.index()] = true;
+        }
+
+        moves.push(movement);
+    }
+
+    Ok(moves)
 }
 
 /// Repeatedly absorbs satellites into the current largest cycle using
@@ -388,6 +533,68 @@ pub fn find_three_opt_21(
 ///
 /// The process terminates when no further direct 2+1 absorption is found.
 /// `stop` is polled between atomic moves, as in [`greedy_three_opt_111`].
+/// Applies independent moves in a single rebuild.
+///
+/// Returns `None` when the result is not a valid 2-factor with exactly one
+/// fewer cycle per move, which tells the caller to fall back to applying them
+/// one at a time. Independence is argued, not proved, so the outcome is
+/// checked rather than trusted.
+fn apply_batch(
+    graph: &PowerGraph,
+    factor: &Factor,
+    moves: &[ThreeOpt21Move],
+    cycles_before: usize,
+) -> Result<Option<Factor>, ThreeOpt21Error> {
+    let mut selected = vec![false; graph.edge_count()];
+
+    for &edge_id in factor.selected_edges() {
+        selected[edge_id.index()] = true;
+    }
+
+    for movement in moves {
+        for &edge_id in movement.removed() {
+            if !selected[edge_id.index()] {
+                return Ok(None);
+            }
+
+            selected[edge_id.index()] = false;
+        }
+
+        for &edge_id in movement.added() {
+            if selected[edge_id.index()] {
+                return Ok(None);
+            }
+
+            selected[edge_id.index()] = true;
+        }
+    }
+
+    let edges = selected
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, is_selected)| is_selected.then_some(EdgeId::from_index(index)))
+        .collect::<Vec<_>>();
+
+    let candidate = Factor::new(graph, edges).map_err(ThreeOpt21Error::Factor)?;
+
+    if candidate.validate_two_factor(graph).is_err() {
+        return Ok(None);
+    }
+
+    let after = CycleDecomposition::new(graph, &candidate).map_err(|error| {
+        ThreeOpt21Error::Decomposition {
+            operation: "decompose batched factor",
+            message: error.to_string(),
+        }
+    })?;
+
+    if cycles_before.saturating_sub(after.cycle_count()) != moves.len() {
+        return Ok(None);
+    }
+
+    Ok(Some(candidate))
+}
+
 pub fn greedy_three_opt_21(
     graph: &PowerGraph,
     factor: &Factor,
@@ -408,14 +615,36 @@ pub fn greedy_three_opt_21(
     let mut current =
         Factor::new(graph, factor.selected_edges().to_vec()).map_err(ThreeOpt21Error::Factor)?;
 
+    let mut cycle_count = initial_cycle_count;
+
     let mut moves = Vec::<ThreeOpt21Move>::new();
 
     while !stop() {
-        let Some(movement) = find_three_opt_21(graph, &current)? else {
+        let batch = find_three_opt_21_batch(graph, &current, stop)?;
+
+        if batch.is_empty() {
             break;
-        };
+        }
+
+        if let Some(next) = apply_batch(graph, &current, &batch, cycle_count)? {
+            cycle_count -= batch.len();
+            current = next;
+            moves.extend(batch);
+            continue;
+        }
+
+        /*
+         * The batch did not compose. Keep only its first move, which is what
+         * an unbatched pass would have chosen anyway, and rescan.
+         */
+        let movement = batch
+            .into_iter()
+            .next()
+            .expect("a non-empty batch has a first move");
 
         current = movement.apply(graph, &current)?;
+
+        cycle_count -= 1;
 
         moves.push(movement);
     }
