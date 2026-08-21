@@ -143,7 +143,7 @@ fn patch_to_local_closure(
 
         let before_111 = clone_factor(graph, &current)?;
 
-        let one_one_one = greedy_three_opt_111(graph, &current)?;
+        let one_one_one = greedy_three_opt_111(graph, &current, &|| false)?;
 
         let one_one_one_moves = one_one_one.move_count();
 
@@ -191,7 +191,7 @@ fn patch_to_local_closure(
 
         let before_21 = clone_factor(graph, &current)?;
 
-        let two_one = greedy_three_opt_21(graph, &current)?;
+        let two_one = greedy_three_opt_21(graph, &current, &|| false)?;
 
         let two_one_moves = two_one.move_count();
 
@@ -240,7 +240,7 @@ fn patch_to_local_closure(
 
         eprintln!("pc-patch:   repair: searching depth <= {}", max_depth);
 
-        let repair = find_alternating_repair(graph, &current, max_depth)?;
+        let repair = find_alternating_repair(graph, &current, max_depth, &|| false)?;
 
         let Some(repair) = repair else {
             eprintln!(

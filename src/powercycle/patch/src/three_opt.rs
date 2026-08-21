@@ -328,9 +328,13 @@ pub fn find_three_opt_111(
 /// verifiable. If profiling shows this to be expensive on the large `k = 5`
 /// instance, the search state can later be made incremental without changing
 /// the public semantics.
+/// `stop` is polled between atomic moves. Returning `true` ends the phase
+/// early and yields whatever was achieved so far, which lets a caller both
+/// honour an interruption and checkpoint a long-running phase.
 pub fn greedy_three_opt_111(
     graph: &PowerGraph,
     factor: &Factor,
+    stop: &dyn Fn() -> bool,
 ) -> Result<GreedyThreeOpt111Result, PatchError> {
     factor
         .validate_two_factor(graph)
@@ -349,7 +353,11 @@ pub fn greedy_three_opt_111(
 
     let mut moves = Vec::<ThreeOpt111Move>::new();
 
-    while let Some(movement) = find_three_opt_111(graph, &current)? {
+    while !stop() {
+        let Some(movement) = find_three_opt_111(graph, &current)? else {
+            break;
+        };
+
         current = movement.apply(graph, &current)?;
 
         moves.push(movement);
@@ -744,7 +752,7 @@ mod tests {
 
         let factor = three_cycle_factor(&graph);
 
-        let result = greedy_three_opt_111(&graph, &factor).unwrap();
+        let result = greedy_three_opt_111(&graph, &factor, &|| false).unwrap();
 
         assert_eq!(result.initial_cycle_count(), 3);
 
@@ -765,7 +773,7 @@ mod tests {
 
         let factor = two_cycle_factor(&graph);
 
-        let result = greedy_three_opt_111(&graph, &factor).unwrap();
+        let result = greedy_three_opt_111(&graph, &factor, &|| false).unwrap();
 
         assert_eq!(result.initial_cycle_count(), 2);
 

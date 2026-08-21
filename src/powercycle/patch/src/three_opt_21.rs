@@ -387,9 +387,11 @@ pub fn find_three_opt_21(
 /// merges one complete satellite into the current largest cycle.
 ///
 /// The process terminates when no further direct 2+1 absorption is found.
+/// `stop` is polled between atomic moves, as in [`greedy_three_opt_111`].
 pub fn greedy_three_opt_21(
     graph: &PowerGraph,
     factor: &Factor,
+    stop: &dyn Fn() -> bool,
 ) -> Result<GreedyThreeOpt21Result, ThreeOpt21Error> {
     factor
         .validate_two_factor(graph)
@@ -408,7 +410,11 @@ pub fn greedy_three_opt_21(
 
     let mut moves = Vec::<ThreeOpt21Move>::new();
 
-    while let Some(movement) = find_three_opt_21(graph, &current)? {
+    while !stop() {
+        let Some(movement) = find_three_opt_21(graph, &current)? else {
+            break;
+        };
+
         current = movement.apply(graph, &current)?;
 
         moves.push(movement);
@@ -846,7 +852,7 @@ mod tests {
 
         let factor = two_cycle_factor(&graph);
 
-        let result = greedy_three_opt_21(&graph, &factor).unwrap();
+        let result = greedy_three_opt_21(&graph, &factor, &|| false).unwrap();
 
         assert_eq!(result.initial_cycle_count(), 2);
 
@@ -869,7 +875,7 @@ mod tests {
 
         let hamiltonian = known_move().apply(&graph, &factor).unwrap();
 
-        let result = greedy_three_opt_21(&graph, &hamiltonian).unwrap();
+        let result = greedy_three_opt_21(&graph, &hamiltonian, &|| false).unwrap();
 
         assert_eq!(result.initial_cycle_count(), 1);
 

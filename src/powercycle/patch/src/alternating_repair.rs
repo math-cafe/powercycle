@@ -219,10 +219,14 @@ impl AlternatingRepairMove {
 /// The search is satellite-first. This is well suited to the intended
 /// late-stage situation where one giant contains almost every vertex and
 /// only a few small satellites remain.
+/// `stop` is polled once per satellite. Returning `true` aborts the search
+/// with [`AlternatingRepairError::Interrupted`], which a caller must not
+/// confuse with "no repair exists at this depth".
 pub fn find_alternating_repair(
     graph: &PowerGraph,
     factor: &Factor,
     max_depth: usize,
+    stop: &dyn Fn() -> bool,
 ) -> Result<Option<AlternatingRepairMove>, AlternatingRepairError> {
     factor
         .validate_two_factor(graph)
@@ -261,6 +265,10 @@ pub fn find_alternating_repair(
     for (cycle_index, satellite) in decomposition.cycles().iter().enumerate() {
         if cycle_index == giant_index {
             continue;
+        }
+
+        if stop() {
+            return Err(AlternatingRepairError::Interrupted);
         }
 
         let vertices = satellite.vertices();
@@ -658,6 +666,9 @@ fn all_distinct(values: &[EdgeId]) -> bool {
 pub enum AlternatingRepairError {
     Factor(FactorError),
 
+    /// The search was stopped by its caller, not exhausted.
+    Interrupted,
+
     Decomposition {
         operation: &'static str,
         message: String,
@@ -721,6 +732,10 @@ impl fmt::Display for AlternatingRepairError {
         match self {
             Self::Factor(error) => {
                 write!(f, "invalid factor: {error}")
+            }
+
+            Self::Interrupted => {
+                write!(f, "alternating repair search interrupted by its caller")
             }
 
             Self::Decomposition { operation, message } => {
@@ -838,7 +853,8 @@ impl Error for AlternatingRepairError {
             | Self::EdgeDoesNotContainVertex { .. }
             | Self::MissingGraphEdge { .. }
             | Self::InvalidCycleReduction { .. }
-            | Self::InvalidGiantGrowth { .. } => None,
+            | Self::InvalidGiantGrowth { .. }
+            | Self::Interrupted => None,
         }
     }
 }
@@ -957,9 +973,15 @@ mod tests {
 
         let factor = depth_three_fixture(&graph);
 
-        assert_eq!(find_alternating_repair(&graph, &factor, 1,).unwrap(), None);
+        assert_eq!(
+            find_alternating_repair(&graph, &factor, 1, &|| false).unwrap(),
+            None
+        );
 
-        assert_eq!(find_alternating_repair(&graph, &factor, 2,).unwrap(), None);
+        assert_eq!(
+            find_alternating_repair(&graph, &factor, 2, &|| false).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -991,7 +1013,7 @@ mod tests {
 
         let factor = depth_three_fixture(&graph);
 
-        let movement = find_alternating_repair(&graph, &factor, 3)
+        let movement = find_alternating_repair(&graph, &factor, 3, &|| false)
             .unwrap()
             .expect("fixture must contain a depth-3 alternating repair");
 
@@ -1012,9 +1034,9 @@ mod tests {
 
         let factor = depth_three_fixture(&graph);
 
-        let first = find_alternating_repair(&graph, &factor, 3).unwrap();
+        let first = find_alternating_repair(&graph, &factor, 3, &|| false).unwrap();
 
-        let second = find_alternating_repair(&graph, &factor, 3).unwrap();
+        let second = find_alternating_repair(&graph, &factor, 3, &|| false).unwrap();
 
         assert_eq!(first, second);
     }
