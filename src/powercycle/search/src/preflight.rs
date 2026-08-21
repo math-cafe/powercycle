@@ -158,6 +158,12 @@ pub struct PreflightReport {
     pub forced_edges: usize,
     pub forbidden_edges: usize,
     pub propagation_updates: usize,
+
+    /// Edge value derived for each `EdgeId`, when propagation ran.
+    ///
+    /// Empty if the preflight stopped before that point.
+    pub edge_states: Vec<EdgeState>,
+
     pub forced_spanning_cycle: bool,
     pub obstruction: Option<PreflightObstruction>,
 }
@@ -226,8 +232,13 @@ impl fmt::Display for PreflightObstruction {
     }
 }
 
+/// The value degree-two propagation was able to derive for an edge.
+///
+/// Each state is a logical consequence of "every vertex has selected degree
+/// exactly two", so it holds for every 2-factor of the graph, not only for
+/// Hamiltonian ones.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EdgeState {
+pub enum EdgeState {
     Unknown,
     Forced,
     Forbidden,
@@ -250,6 +261,7 @@ pub fn hamiltonian_preflight(graph: &PowerGraph) -> PreflightReport {
         forced_edges: 0,
         forbidden_edges: 0,
         propagation_updates: 0,
+        edge_states: Vec::new(),
         forced_spanning_cycle: false,
         obstruction: None,
     };
@@ -319,7 +331,12 @@ pub fn hamiltonian_preflight(graph: &PowerGraph) -> PreflightReport {
         return report;
     }
 
-    match find_forced_cycle(graph, &propagation.edge_states, &propagation.forced_degree) {
+    let forced_cycle =
+        find_forced_cycle(graph, &propagation.edge_states, &propagation.forced_degree);
+
+    report.edge_states = propagation.edge_states;
+
+    match forced_cycle {
         Some(ForcedCycle::Proper { start_vertex, size }) => {
             report.obstruction = Some(PreflightObstruction::ForcedSubcycle { start_vertex, size });
         }

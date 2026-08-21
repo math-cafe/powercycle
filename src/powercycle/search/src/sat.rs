@@ -3,6 +3,8 @@ use std::fmt;
 
 use powercycle_core::{CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
 
+use crate::preflight::EdgeState;
+
 use rustsat::solvers::{ControlSignal, Solve, SolverResult, Terminate};
 use rustsat::types::{Clause, Lit, TernaryVal, Var};
 use rustsat_cadical::CaDiCaL;
@@ -181,6 +183,21 @@ impl BudgetedBoundaryCutStats {
     }
 }
 
+/// Counts for one batch of propagated unit clauses.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PropagatedUnitStats {
+    pub forced: usize,
+    pub forbidden: usize,
+}
+
+impl PropagatedUnitStats {
+    /// Returns the number of edge variables fixed by the batch.
+    #[must_use]
+    pub const fn total(self) -> usize {
+        self.forced + self.forbidden
+    }
+}
+
 /// Incremental SAT solver for 2-factors of a power-sum graph.
 ///
 /// SAT variable `i` corresponds exactly to graph `EdgeId(i)`.
@@ -314,6 +331,56 @@ impl SatFactorSolver {
             })?;
 
         Ok(width)
+    }
+
+    /// Asserts the edge values derived by degree-two propagation.
+    ///
+    /// Every state supplied here is a consequence of the base
+    /// selected-degree-equals-two constraints, so the set of satisfying
+    /// 2-factors is unchanged: the clauses only hand the solver a conclusion
+    /// it could reach on its own.
+    pub fn add_propagated_units(
+        &mut self,
+        graph: &PowerGraph,
+        edge_states: &[EdgeState],
+    ) -> Result<PropagatedUnitStats, SatError> {
+        self.ensure_compatible_graph(graph)?;
+
+        if edge_states.len() != self.graph_edge_count {
+            return Err(SatError::PropagationLengthMismatch {
+                states: edge_states.len(),
+                edge_count: self.graph_edge_count,
+            });
+        }
+
+        let mut stats = PropagatedUnitStats::default();
+
+        for (index, state) in edge_states.iter().enumerate() {
+            let negated = match state {
+                EdgeState::Unknown => continue,
+                EdgeState::Forced => false,
+                EdgeState::Forbidden => true,
+            };
+
+            let clause: Clause = [edge_literal(EdgeId::from_index(index), negated)?]
+                .into_iter()
+                .collect();
+
+            self.solver
+                .add_clause(clause)
+                .map_err(|error| SatError::Solver {
+                    operation: "add propagated unit clause",
+                    message: error.to_string(),
+                })?;
+
+            if negated {
+                stats.forbidden += 1;
+            } else {
+                stats.forced += 1;
+            }
+        }
+
+        Ok(stats)
     }
 
     /// Adds one cycle-breaking cut for every cycle except the largest.
@@ -927,6 +994,11 @@ pub enum SatError {
         message: String,
     },
 
+    PropagationLengthMismatch {
+        states: usize,
+        edge_count: usize,
+    },
+
     Solver {
         operation: &'static str,
         message: String,
@@ -973,6 +1045,13 @@ impl fmt::Display for SatError {
                 )
             }
 
+            Self::PropagationLengthMismatch { states, edge_count } => {
+                write!(
+                    f,
+                    "propagation covers {states} edges but the graph has {edge_count}"
+                )
+            }
+
             Self::InvalidDecomposition { message } => {
                 write!(f, "invalid cycle decomposition: {message}")
             }
@@ -1013,6 +1092,7 @@ impl Error for SatError {
             Self::TooManyVariables { .. }
             | Self::GraphMismatch { .. }
             | Self::InvalidDecomposition { .. }
+            | Self::PropagationLengthMismatch { .. }
             | Self::Solver { .. }
             | Self::Interrupted => None,
         }
@@ -1080,6 +1160,90 @@ mod tests {
         let mut solver = SatFactorSolver::new(&graph).unwrap();
 
         assert!(solver.solve(&graph).unwrap().is_none());
+    }
+
+    /// Cross-validates degree-two propagation against the solver.
+    ///
+    /// The propagation claims each forced edge belongs to every 2-factor and
+    /// each forbidden edge to none. An unconstrained model is an independent
+    /// oracle for that claim.
+    #[test]
+    fn propagation_agrees_with_an_unconstrained_solution() {
+        for (k, n) in [(2u32, 32usize), (2, 40), (3, 473), (5, 246_877)] {
+            let graph = PowerGraph::new(k, n).unwrap();
+
+            let report = crate::preflight::hamiltonian_preflight(&graph);
+
+            assert!(report.passed(), "G_{k}({n}) should clear the preflight");
+
+            let mut solver = SatFactorSolver::new(&graph).unwrap();
+
+            let factor = solver
+                .solve(&graph)
+                .unwrap()
+                .expect("the graph must admit a 2-factor");
+
+            for (index, state) in report.edge_states.iter().enumerate() {
+                let edge_id = EdgeId::from_index(index);
+
+                match state {
+                    EdgeState::Forced => assert!(
+                        factor.contains(edge_id),
+                        "G_{k}({n}): forced edge {index} missing from a 2-factor"
+                    ),
+
+                    EdgeState::Forbidden => assert!(
+                        !factor.contains(edge_id),
+                        "G_{k}({n}): forbidden edge {index} used by a 2-factor"
+                    ),
+
+                    EdgeState::Unknown => {}
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn propagated_units_keep_the_model_satisfiable() {
+        let graph = PowerGraph::new(2, 32).unwrap();
+
+        let report = crate::preflight::hamiltonian_preflight(&graph);
+
+        let mut solver = SatFactorSolver::new(&graph).unwrap();
+
+        let stats = solver
+            .add_propagated_units(&graph, &report.edge_states)
+            .unwrap();
+
+        assert_eq!(stats.forced, report.forced_edges);
+        assert_eq!(stats.forbidden, report.forbidden_edges);
+        assert_eq!(stats.total(), stats.forced + stats.forbidden);
+        assert!(stats.total() > 0);
+
+        let factor = solver
+            .solve(&graph)
+            .unwrap()
+            .expect("the units are implied, so the model stays satisfiable");
+
+        factor.validate_two_factor(&graph).unwrap();
+        assert_eq!(factor.edge_count(), graph.vertex_count());
+    }
+
+    #[test]
+    fn propagated_units_reject_a_mismatched_length() {
+        let graph = PowerGraph::new(2, 32).unwrap();
+
+        let mut solver = SatFactorSolver::new(&graph).unwrap();
+
+        let error = solver
+            .add_propagated_units(&graph, &[EdgeState::Unknown])
+            .expect_err("a short state vector must be rejected");
+
+        assert!(matches!(
+            error,
+            SatError::PropagationLengthMismatch { states: 1, edge_count }
+                if edge_count == graph.edge_count()
+        ));
     }
 
     #[test]

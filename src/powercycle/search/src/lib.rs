@@ -11,8 +11,8 @@ mod sat;
 pub use run::{Invocation, ProgramInfo, RunContext, RunError, RunPaths, RunState, RunStatus};
 
 pub use sat::{
-    BoundaryCutBudget, BudgetedBoundaryCutStats, BudgetedCutStats, CycleBreakingBudget, SatError,
-    SatFactorSolver, SatModelStats, SubtourCutStats,
+    BoundaryCutBudget, BudgetedBoundaryCutStats, BudgetedCutStats, CycleBreakingBudget,
+    PropagatedUnitStats, SatError, SatFactorSolver, SatModelStats, SubtourCutStats,
 };
 
 pub mod preflight;

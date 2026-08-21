@@ -13,7 +13,10 @@ use powercycle_search::preflight::{PreflightReport, hamiltonian_preflight};
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
 const DEFAULT_MAX_TOURS: u64 = 20;
-const ALTERNATING_REPAIR_MAX_DEPTH: usize = 4;
+/// Depth used when `--max-depth` is not supplied.
+///
+/// Four is the smallest depth that closed the k = 5, n = 490463 search.
+const DEFAULT_REPAIR_MAX_DEPTH: usize = 4;
 
 fn main() -> ExitCode {
     match run() {
@@ -213,6 +216,43 @@ fn run_search(
         format!("  build time     : {:.3} s", model_elapsed.as_secs_f64()),
     )?;
 
+    /*
+     * The preflight already derived a value for a large share of the edges.
+     * Those values are consequences of the degree constraints, so asserting
+     * them changes no solution; it only saves the solver from re-deriving
+     * them. Whether that helps is instance-dependent, hence the switch.
+     */
+    if problem.propagated_units {
+        let unit_start = Instant::now();
+
+        let unit_stats = solver.add_propagated_units(&graph, &preflight.edge_states)?;
+
+        let unit_elapsed = unit_start.elapsed();
+
+        report(run, "propagated units")?;
+
+        report(run, format!("  forced         : {}", unit_stats.forced))?;
+
+        report(run, format!("  forbidden      : {}", unit_stats.forbidden))?;
+
+        report(
+            run,
+            format!(
+                "  fixed          : {} of {} variables ({:.1}%)",
+                unit_stats.total(),
+                stats.variables,
+                100.0 * unit_stats.total() as f64 / stats.variables as f64
+            ),
+        )?;
+
+        report(
+            run,
+            format!("  add time       : {:.3} s", unit_elapsed.as_secs_f64()),
+        )?;
+    } else {
+        report(run, "propagated units: disabled")?;
+    }
+
     let budget = BoundaryCutBudget::default();
 
     report(run, "SEC policy")?;
@@ -258,7 +298,7 @@ fn run_search(
 
             report(
                 run,
-                format!("  repair depth   : <= {}", ALTERNATING_REPAIR_MAX_DEPTH),
+                format!("  repair depth   : <= {}", problem.repair_max_depth),
             )?;
         }
 
@@ -425,7 +465,13 @@ fn run_search(
 
         report(run, format!("tour {tour} patch dry-run"))?;
 
-        let patch = patch_to_local_closure(run, &graph, &factor, problem.patch_mode)?;
+        let patch = patch_to_local_closure(
+            run,
+            &graph,
+            &factor,
+            problem.patch_mode,
+            problem.repair_max_depth,
+        )?;
 
         let patch_elapsed = patch_start.elapsed();
 
@@ -867,6 +913,7 @@ fn patch_to_local_closure(
     graph: &PowerGraph,
     factor: &Factor,
     patch_mode: PatchMode,
+    repair_max_depth: usize,
 ) -> Result<PatchClosureResult, Box<dyn Error>> {
     let mut current = Factor::new(graph, factor.selected_edges().to_vec())?;
 
@@ -1031,15 +1078,12 @@ fn patch_to_local_closure(
          */
         report(
             run,
-            format!(
-                "  repair         : searching depth <= {}",
-                ALTERNATING_REPAIR_MAX_DEPTH
-            ),
+            format!("  repair         : searching depth <= {}", repair_max_depth),
         )?;
 
         let repair_start = Instant::now();
 
-        let repair = find_alternating_repair(graph, &current, ALTERNATING_REPAIR_MAX_DEPTH)?;
+        let repair = find_alternating_repair(graph, &current, repair_max_depth)?;
 
         let repair_search_elapsed = repair_start.elapsed();
 
@@ -1560,6 +1604,8 @@ struct Problem {
     patch_mode: PatchMode,
     dump_policy: DumpPolicy,
     hamiltonian_policy: HamiltonianPolicy,
+    propagated_units: bool,
+    repair_max_depth: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1604,11 +1650,26 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
 
     let mut patch_mode = PatchMode::Full;
     let mut probe_only_seen = false;
+    let mut propagated_units = false;
+    let mut propagated_units_seen = false;
+    let mut repair_max_depth = DEFAULT_REPAIR_MAX_DEPTH;
+    let mut repair_max_depth_seen = false;
     let mut dump_policy = None::<DumpPolicy>;
     let mut hamiltonian_policy = None::<HamiltonianPolicy>;
 
     for argument in arguments {
         match argument.as_str() {
+            "--propagated-units" => {
+                if propagated_units_seen {
+                    return Err(CliError::DuplicateOption {
+                        option: "--propagated-units",
+                    });
+                }
+
+                propagated_units_seen = true;
+                propagated_units = true;
+            }
+
             "--probe-only" => {
                 if probe_only_seen {
                     return Err(CliError::DuplicateOption {
@@ -1618,6 +1679,29 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
 
                 probe_only_seen = true;
                 patch_mode = PatchMode::ProbeOnly;
+            }
+
+            value if value.starts_with("--max-depth=") => {
+                if repair_max_depth_seen {
+                    return Err(CliError::DuplicateOption {
+                        option: "--max-depth",
+                    });
+                }
+
+                let value = value
+                    .strip_prefix("--max-depth=")
+                    .expect("matched --max-depth= prefix must strip");
+
+                let depth = value.parse::<usize>().map_err(|_| CliError::InvalidDepth {
+                    value: value.to_owned(),
+                })?;
+
+                if depth == 0 {
+                    return Err(CliError::DepthZero);
+                }
+
+                repair_max_depth_seen = true;
+                repair_max_depth = depth;
             }
 
             value if value.starts_with("--dump=") => {
@@ -1706,6 +1790,8 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         patch_mode,
         dump_policy,
         hamiltonian_policy,
+        propagated_units,
+        repair_max_depth,
     })
 }
 
@@ -1716,6 +1802,10 @@ enum CliError {
     UnknownOption { value: String },
 
     DuplicateOption { option: &'static str },
+
+    InvalidDepth { value: String },
+
+    DepthZero,
 
     InvalidExponent { value: String },
 
@@ -1738,7 +1828,7 @@ impl fmt::Display for CliError {
             Self::Usage => {
                 write!(
                     f,
-                    "usage: pc-search [--probe-only] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                    "usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -1746,8 +1836,19 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-search [--probe-only] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                     usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
+            }
+
+            Self::InvalidDepth { value } => {
+                write!(
+                    f,
+                    "invalid repair depth {value:?}: expected a positive integer"
+                )
+            }
+
+            Self::DepthZero => {
+                write!(f, "invalid repair depth 0: expected at least 1")
             }
 
             Self::DuplicateOption { option } => {
@@ -1834,6 +1935,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1849,6 +1952,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1864,6 +1969,8 @@ mod tests {
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Always,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1879,6 +1986,8 @@ mod tests {
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Always,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1894,6 +2003,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Always,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1909,6 +2020,8 @@ mod tests {
                 patch_mode: PatchMode::ProbeOnly,
                 dump_policy: DumpPolicy::Records,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1924,6 +2037,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Never,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -1939,6 +2054,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
                 hamiltonian_policy: HamiltonianPolicy::Continue,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
@@ -2067,6 +2184,8 @@ mod tests {
                 patch_mode: PatchMode::Full,
                 dump_policy: DumpPolicy::Records,
                 hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
             })
         );
     }
