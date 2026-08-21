@@ -215,7 +215,10 @@ depth by one or two is affordable when a single small satellite is blocking.
 ### 5.4 Closure loop
 
 `pc-search` alternates greedy `three-opt-111`, greedy `three-opt-21` and
-alternating repair until the factor is Hamiltonian or no operator applies. The
+alternating repair until the factor is Hamiltonian or no operator applies. All
+three operators poll a caller-supplied predicate between atomic moves, which is
+what makes a phase both interruptible and checkpointable: it surrenders, the
+partial factor is persisted, and it resumes. The
 repair depth is `ALTERNATING_REPAIR_MAX_DEPTH`, currently a compile-time constant
 of 4; `pc-patch` exposes it as `--max-depth`.
 

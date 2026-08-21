@@ -182,12 +182,13 @@ in search of a single cycle.
 
 ```console
 pc-search [--probe-only] [--propagated-units] [--max-depth=N]
-          [--dump=always|records|never]
+          [--checkpoint-secs=N] [--dump=always|records|never]
           [--on-hamiltonian=stop|continue] <k> <n> [max-tours]
 ```
 
 `--max-depth` bounds the alternating repair, matching the `pc-patch` flag of
-the same name.
+the same name. `--checkpoint-secs` sets how often a long patch phase yields to
+be persisted; the default is 600.
 
 ### `pc-patch`
 
@@ -302,9 +303,20 @@ data/runs/<run-id>/
 └── dumps/
 ```
 
-`checkpoint/` is created by every run but is not written to yet. Long searches
-therefore cannot currently be resumed, and a run interrupted by anything other
-than Ctrl-C leaves `status.json` reporting `running` with no process behind it.
+`checkpoint/` holds crash-recovery state, kept deliberately separate from the
+curated dumps that `--dump` governs. The raw factor is written there as soon as
+a SAT tour returns one, before any patching, and each long patch phase yields on
+a timer so its partial progress is persisted too. Only the latest state per
+stage is kept, written through a temporary file and renamed, since a truncated
+checkpoint is worse than none.
+
+This matters because the costs are wildly asymmetric: the SAT solve took over
+four hours on `G_6(15748961)` while the dump for that tour is only written once
+patching finishes, which can take far longer still. A checkpoint turns a lost
+run into `pc-patch <run>/checkpoint/raw.pcdump.json`.
+
+A run killed rather than interrupted still leaves `status.json` reporting
+`running` with no process behind it; nothing reaps those yet.
 
 `data/dumps/` is reserved for imported or manually selected dumps outside a
 specific run.

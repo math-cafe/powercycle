@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 use powercycle_config::Config;
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 use powercycle_format::{Dump, MoveRecord, Provenance};
-use powercycle_patch::{find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111};
+use powercycle_patch::{
+    AlternatingRepairError, find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111,
+};
 use powercycle_search::preflight::{PreflightReport, hamiltonian_preflight};
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
@@ -17,6 +19,9 @@ const DEFAULT_MAX_TOURS: u64 = 20;
 ///
 /// Four is the smallest depth that closed the k = 5, n = 490463 search.
 const DEFAULT_REPAIR_MAX_DEPTH: usize = 4;
+
+/// How often a long patch phase yields so its progress can be persisted.
+const DEFAULT_CHECKPOINT_SECS: u64 = 600;
 
 fn main() -> ExitCode {
     match run() {
@@ -408,6 +413,26 @@ fn run_search(
 
         run.set_tour(tour)?;
 
+        /*
+         * Persist the raw factor before doing anything else with it.
+         *
+         * The SAT solve is by far the most expensive step - over four hours
+         * at k = 6 - and the curated dump for this tour is only written once
+         * the patch has finished, which can take far longer still. Without
+         * this the whole solve is lost to any interruption.
+         */
+        let checkpoint_start = Instant::now();
+
+        write_checkpoint(run, &graph, &factor, tour, "raw")?;
+
+        report(
+            run,
+            format!(
+                "  checkpoint     : raw factor persisted, {:.3} s",
+                checkpoint_start.elapsed().as_secs_f64()
+            ),
+        )?;
+
         report_factor(
             run,
             tour,
@@ -471,9 +496,21 @@ fn run_search(
             &factor,
             problem.patch_mode,
             problem.repair_max_depth,
+            CheckpointPolicy {
+                tour,
+                interrupt: &interrupt_requested,
+                every: problem.checkpoint_every,
+            },
         )?;
 
         let patch_elapsed = patch_start.elapsed();
+
+        if patch.interrupted {
+            report(
+                run,
+                format!("tour {tour} patch stopped before closure; state checkpointed"),
+            )?;
+        }
 
         let patched_decomposition = CycleDecomposition::new(&graph, &patch.factor)?;
 
@@ -821,6 +858,104 @@ fn run_search(
     Ok(outcome)
 }
 
+/// Where a long phase persists its progress, and how often.
+#[derive(Clone, Copy)]
+struct CheckpointPolicy<'a> {
+    tour: u64,
+    interrupt: &'a AtomicBool,
+    every: Duration,
+}
+
+impl CheckpointPolicy<'_> {
+    fn interrupted(self) -> bool {
+        self.interrupt.load(Ordering::SeqCst)
+    }
+}
+
+/// One greedy phase: consumes the current factor and a stop predicate, yields
+/// the number of atomic moves performed and the resulting factor.
+type GreedyStep<'a> =
+    dyn Fn(&Factor, &dyn Fn() -> bool) -> Result<(usize, Factor), Box<dyn Error>> + 'a;
+
+/// Persists the current factor as crash-recovery state.
+///
+/// Deliberately separate from the curated dumps governed by `--dump`: those
+/// record results worth keeping, this one exists so that a search killed
+/// mid-patch does not throw away the SAT work that produced its factor. Only
+/// the latest checkpoint per stage is kept.
+///
+/// Written through a temporary file and renamed, because a truncated
+/// checkpoint is worse than no checkpoint.
+fn write_checkpoint(
+    run: &RunContext,
+    graph: &PowerGraph,
+    factor: &Factor,
+    tour: u64,
+    stage: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut provenance = Provenance::new("pc-search", env!("CARGO_PKG_VERSION"));
+
+    provenance.session = Some(run.id().to_owned());
+    provenance.tour = Some(tour);
+    provenance.reason = vec!["checkpoint".to_owned(), stage.to_owned()];
+
+    let dump = Dump::new(graph, factor, factor, provenance, Vec::new())?;
+
+    let directory = &run.paths().checkpoint;
+    let final_path = directory.join(format!("{stage}.pcdump.json"));
+    let temporary_path = directory.join(format!("{stage}.pcdump.json.partial"));
+
+    dump.write(&temporary_path)?;
+    std::fs::rename(&temporary_path, &final_path)?;
+
+    Ok(())
+}
+
+/// Runs one greedy phase, surrendering periodically so it can be checkpointed.
+///
+/// The operators poll `stop` between atomic moves. A phase that would run for
+/// hours therefore yields on a timer, we persist what it achieved, and it
+/// resumes. Returns the total move count and whether an interruption ended it.
+fn run_greedy_phase(
+    run: &RunContext,
+    graph: &PowerGraph,
+    current: &mut Factor,
+    stage: &str,
+    policy: CheckpointPolicy<'_>,
+    step: &GreedyStep<'_>,
+) -> Result<(usize, bool), Box<dyn Error>> {
+    let mut total = 0usize;
+
+    loop {
+        let deadline = Instant::now() + policy.every;
+
+        let stop = || policy.interrupted() || Instant::now() >= deadline;
+
+        let (moves, next) = step(current, &stop)?;
+
+        let timed_out = Instant::now() >= deadline;
+
+        *current = next;
+        total += moves;
+
+        if policy.interrupted() {
+            write_checkpoint(run, graph, current, policy.tour, stage)?;
+            return Ok((total, true));
+        }
+
+        if !timed_out {
+            return Ok((total, false));
+        }
+
+        write_checkpoint(run, graph, current, policy.tour, stage)?;
+
+        report(
+            run,
+            format!("  checkpoint     : {stage}, {total} moves so far"),
+        )?;
+    }
+}
+
 fn save_raw_dump(
     run: &RunContext,
     graph: &PowerGraph,
@@ -914,6 +1049,7 @@ fn patch_to_local_closure(
     factor: &Factor,
     patch_mode: PatchMode,
     repair_max_depth: usize,
+    policy: CheckpointPolicy<'_>,
 ) -> Result<PatchClosureResult, Box<dyn Error>> {
     let mut current = Factor::new(graph, factor.selected_edges().to_vec())?;
 
@@ -938,15 +1074,22 @@ fn patch_to_local_closure(
 
         let one_one_one_start = Instant::now();
 
-        let one_one_one = greedy_three_opt_111(graph, &current)?;
+        let (one_one_one_moves, one_one_one_stopped) = run_greedy_phase(
+            run,
+            graph,
+            &mut current,
+            "patch-111",
+            policy,
+            &|factor, stop| {
+                let result = greedy_three_opt_111(graph, factor, stop)?;
+
+                Ok((result.move_count(), result.into_factor()))
+            },
+        )?;
 
         let one_one_one_elapsed = one_one_one_start.elapsed();
 
-        let one_one_one_moves = one_one_one.move_count();
-
         total_111_moves += one_one_one_moves;
-
-        current = one_one_one.into_factor();
 
         if one_one_one_moves > 0 {
             history.push(symmetric_difference_move(
@@ -971,10 +1114,25 @@ fn patch_to_local_closure(
             ),
         )?;
 
+        if one_one_one_stopped {
+            report(run, "  closure        : interrupted during 1+1+1")?;
+
+            return Ok(PatchClosureResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
+
         if after_111.is_hamiltonian() {
             report(run, "  closure        : Hamiltonian after 1+1+1")?;
 
             return Ok(PatchClosureResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -994,15 +1152,22 @@ fn patch_to_local_closure(
 
         let two_one_start = Instant::now();
 
-        let two_one = greedy_three_opt_21(graph, &current)?;
+        let (two_one_moves, two_one_stopped) = run_greedy_phase(
+            run,
+            graph,
+            &mut current,
+            "patch-21",
+            policy,
+            &|factor, stop| {
+                let result = greedy_three_opt_21(graph, factor, stop)?;
+
+                Ok((result.move_count(), result.into_factor()))
+            },
+        )?;
 
         let two_one_elapsed = two_one_start.elapsed();
 
-        let two_one_moves = two_one.move_count();
-
         total_21_moves += two_one_moves;
-
-        current = two_one.into_factor();
 
         if two_one_moves > 0 {
             history.push(symmetric_difference_move(
@@ -1027,10 +1192,25 @@ fn patch_to_local_closure(
             ),
         )?;
 
+        if two_one_stopped {
+            report(run, "  closure        : interrupted during 2+1")?;
+
+            return Ok(PatchClosureResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
+
         if after_21.is_hamiltonian() {
             report(run, "  closure        : Hamiltonian after 2+1")?;
 
             return Ok(PatchClosureResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -1055,6 +1235,7 @@ fn patch_to_local_closure(
                 )?;
 
                 return Ok(PatchClosureResult {
+                    interrupted: false,
                     factor: current,
                     history,
                     passes: pass,
@@ -1083,7 +1264,32 @@ fn patch_to_local_closure(
 
         let repair_start = Instant::now();
 
-        let repair = find_alternating_repair(graph, &current, repair_max_depth)?;
+        let repair = match find_alternating_repair(graph, &current, repair_max_depth, &|| {
+            policy.interrupted()
+        }) {
+            Ok(found) => found,
+
+            Err(AlternatingRepairError::Interrupted) => {
+                write_checkpoint(run, graph, &current, policy.tour, "patch-repair")?;
+
+                report(
+                    run,
+                    "  closure        : interrupted during alternating repair",
+                )?;
+
+                return Ok(PatchClosureResult {
+                    interrupted: true,
+                    factor: current,
+                    history,
+                    passes: pass,
+                    one_one_one_moves: total_111_moves,
+                    two_one_moves: total_21_moves,
+                    alternating_repairs,
+                });
+            }
+
+            Err(error) => return Err(Box::new(error)),
+        };
 
         let repair_search_elapsed = repair_start.elapsed();
 
@@ -1102,6 +1308,7 @@ fn patch_to_local_closure(
             )?;
 
             return Ok(PatchClosureResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -1153,6 +1360,7 @@ fn patch_to_local_closure(
             )?;
 
             return Ok(PatchClosureResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -1500,6 +1708,7 @@ fn report(run: &RunContext, message: impl AsRef<str>) -> Result<(), Box<dyn Erro
 
 #[derive(Debug)]
 struct PatchClosureResult {
+    interrupted: bool,
     factor: Factor,
     history: Vec<MoveRecord>,
     passes: usize,
@@ -1606,6 +1815,7 @@ struct Problem {
     hamiltonian_policy: HamiltonianPolicy,
     propagated_units: bool,
     repair_max_depth: usize,
+    checkpoint_every: Duration,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1654,6 +1864,8 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
     let mut propagated_units_seen = false;
     let mut repair_max_depth = DEFAULT_REPAIR_MAX_DEPTH;
     let mut repair_max_depth_seen = false;
+    let mut checkpoint_secs = DEFAULT_CHECKPOINT_SECS;
+    let mut checkpoint_secs_seen = false;
     let mut dump_policy = None::<DumpPolicy>;
     let mut hamiltonian_policy = None::<HamiltonianPolicy>;
 
@@ -1679,6 +1891,28 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
 
                 probe_only_seen = true;
                 patch_mode = PatchMode::ProbeOnly;
+            }
+
+            value if value.starts_with("--checkpoint-secs=") => {
+                if checkpoint_secs_seen {
+                    return Err(CliError::DuplicateOption {
+                        option: "--checkpoint-secs",
+                    });
+                }
+
+                let value = value
+                    .strip_prefix("--checkpoint-secs=")
+                    .expect("matched --checkpoint-secs= prefix must strip");
+
+                checkpoint_secs = value.parse::<u64>().map_err(|_| CliError::InvalidSeconds {
+                    value: value.to_owned(),
+                })?;
+
+                if checkpoint_secs == 0 {
+                    return Err(CliError::SecondsZero);
+                }
+
+                checkpoint_secs_seen = true;
             }
 
             value if value.starts_with("--max-depth=") => {
@@ -1792,6 +2026,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
         hamiltonian_policy,
         propagated_units,
         repair_max_depth,
+        checkpoint_every: Duration::from_secs(checkpoint_secs),
     })
 }
 
@@ -1806,6 +2041,10 @@ enum CliError {
     InvalidDepth { value: String },
 
     DepthZero,
+
+    InvalidSeconds { value: String },
+
+    SecondsZero,
 
     InvalidExponent { value: String },
 
@@ -1828,7 +2067,7 @@ impl fmt::Display for CliError {
             Self::Usage => {
                 write!(
                     f,
-                    "usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                    "usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -1836,7 +2075,7 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                     usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -1849,6 +2088,17 @@ impl fmt::Display for CliError {
 
             Self::DepthZero => {
                 write!(f, "invalid repair depth 0: expected at least 1")
+            }
+
+            Self::InvalidSeconds { value } => {
+                write!(
+                    f,
+                    "invalid checkpoint interval {value:?}: expected a positive integer"
+                )
+            }
+
+            Self::SecondsZero => {
+                write!(f, "invalid checkpoint interval 0: expected at least 1")
             }
 
             Self::DuplicateOption { option } => {
@@ -1937,6 +2187,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -1954,6 +2205,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -1971,6 +2223,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -1988,6 +2241,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -2005,6 +2259,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -2022,6 +2277,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -2039,6 +2295,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -2056,6 +2313,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Continue,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -2186,6 +2444,7 @@ mod tests {
                 hamiltonian_policy: HamiltonianPolicy::Stop,
                 propagated_units: false,
                 repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
