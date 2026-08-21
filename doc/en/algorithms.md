@@ -67,9 +67,35 @@ order of cost:
 5. **Forced subcycle.** If the forced edges close a cycle that does not span all
    vertices, no Hamiltonian cycle contains them.
 
-The propagation is not only a filter. On `G_5(246877)` it determines 198205
-forced and 60195 forbidden edges — 69% of all edges — and on `G_6(15748961)`,
-47%. That information is currently discarded after the check.
+The propagation determines a large share of the graph: 198205 forced and 60195
+forbidden edges on `G_5(246877)`, which is 69% of all edges, and 47% on
+`G_6(15748961)`.
+
+That looks like free information for the solver, and `pc-search
+--propagated-units` will assert all of it as unit clauses. **Measured, it makes
+no difference.** On `G_5(490463)`, three paired runs of the first SAT tour:
+
+```text
+             without      with
+run 1        48.332 s     48.282 s
+run 2        49.764 s     50.656 s
+run 3        49.193 s     49.139 s
+mean         49.096 s     49.359 s     +0.5%
+```
+
+The differences fall on both sides of zero, the mean is slightly worse, and the
+factor produced is identical in every case — 91 cycles with giant size 383558.
+
+The reason is that these units are already implied by the base encoding, and
+implied by *unit propagation* specifically. A vertex of degree two contributes
+at-least-two clauses of width `d - 1 = 1`, which are literally the forced units.
+The cascade then follows from the at-most-two clauses: once two edges at a
+vertex are true, every ternary clause containing them forces the third false.
+CaDiCaL performs this at decision level zero during preprocessing, so handing it
+the conclusion saves nothing.
+
+The flag and this measurement are kept so the experiment is not repeated. A
+solver without preprocessing, or a different encoding, could behave otherwise.
 
 ## 3. Relaxation to a 2-factor
 
@@ -214,4 +240,6 @@ any solver — and is out of reach for this approach.
 
 `pc-scan` inherits a related hazard: it builds the full graph for the first `n`
 that survives the graph-free check, which at `k = 7` means attempting that same
-36 GB allocation.
+36 GB allocation. `--max-graph-n=N` and `--quick-only` bound the construction,
+reporting `UNCHECKED` instead of building. An unguarded scan is unchanged, so
+the published certificates still reproduce byte for byte.

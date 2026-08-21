@@ -76,6 +76,11 @@ cargo build --release
 ./target/release/pc-export <dump>.pcdump.json     # certify
 ```
 
+At large `k` the first candidate is far too big to build: at `k = 7` its graph
+would need about 36 GB. Bound the construction with `--max-graph-n=N` or
+`--quick-only`, which report `UNCHECKED` instead of building. An unguarded scan
+behaves exactly as before.
+
 `pc-scan` reporting `CANDIDATE` means no implemented obstruction was found. It
 does not prove that a Hamiltonian cycle exists.
 

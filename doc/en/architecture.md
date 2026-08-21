@@ -163,8 +163,13 @@ rules `G_k(n)` out. Each `n` is first tested with the graph-free degree check;
 only the survivors pay for a graph construction and the full preflight.
 
 ```console
-pc-scan [--compact] <k> <start> <end>
+pc-scan [--compact] [--max-graph-n=N | --quick-only] <k> <start> <end>
 ```
+
+`--max-graph-n` and `--quick-only` bound the graph construction. Beyond the
+bound the verdict is `UNCHECKED` rather than `CANDIDATE`, because the full
+preflight did not run. An unguarded scan never reports `UNCHECKED`, so the
+published certificates are unaffected.
 
 A `CANDIDATE` verdict means no implemented obstruction was found. It does not
 prove that a Hamiltonian cycle exists.
@@ -176,9 +181,13 @@ subtour-elimination cuts, and applies the patching operators to each raw factor
 in search of a single cycle.
 
 ```console
-pc-search [--probe-only] [--dump=always|records|never]
+pc-search [--probe-only] [--propagated-units] [--max-depth=N]
+          [--dump=always|records|never]
           [--on-hamiltonian=stop|continue] <k> <n> [max-tours]
 ```
+
+`--max-depth` bounds the alternating repair, matching the `pc-patch` flag of
+the same name.
 
 ### `pc-patch`
 

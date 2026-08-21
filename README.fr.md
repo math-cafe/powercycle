@@ -78,6 +78,11 @@ cargo build --release
 ./target/release/pc-export <dump>.pcdump.json     # certifier
 ```
 
+Aux grands `k`, le premier candidat est bien trop gros à construire : à `k = 7`
+son graphe demanderait environ 36 Go. Borne la construction avec
+`--max-graph-n=N` ou `--quick-only`, qui rapportent `UNCHECKED` au lieu de
+construire. Un scan sans garde se comporte exactement comme avant.
+
 Un verdict `CANDIDATE` de `pc-scan` signifie qu'aucune obstruction implémentée
 n'a été trouvée. Il ne prouve pas qu'un cycle hamiltonien existe.
 
