@@ -60,7 +60,7 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
     let mut compact_group = None::<CompactGroup>;
 
     for n in options.start..=options.end {
-        let classification = classify(options.k, n)?;
+        let classification = classify(options.k, n, options.max_graph_n)?;
 
         stats.scanned += 1;
 
@@ -71,6 +71,10 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
         match classification.status {
             ScanStatus::Candidate => {
                 stats.candidates += 1;
+            }
+
+            ScanStatus::Unchecked => {
+                stats.unchecked += 1;
             }
 
             ScanStatus::Impossible => {
@@ -138,6 +142,11 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
         stats.full_preflight_rejections
     );
     eprintln!("pc-scan:   candidates           : {}", stats.candidates);
+
+    if stats.unchecked > 0 {
+        eprintln!("pc-scan:   unchecked            : {}", stats.unchecked);
+    }
+
     eprintln!("pc-scan:   graphs built         : {}", stats.graphs_built);
     eprintln!(
         "pc-scan:   elapsed              : {:.3} s",
@@ -147,7 +156,39 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn classify(k: u32, n: usize) -> Result<Classification, Box<dyn Error>> {
+/// Announce a graph construction expected to need at least this much memory.
+const LARGE_GRAPH_WARNING_BYTES: u128 = 2_000_000_000;
+
+/// Rough memory cost of `PowerGraph::new(k, n)`, or `None` on overflow.
+///
+/// Counts the edge list and the CSR incidence list at 16 bytes per edge each,
+/// plus one offset per vertex.
+fn estimated_graph_bytes(k: u32, n: usize) -> Option<u128> {
+    let n = n as u128;
+    let mut edges = 0u128;
+    let mut base = 2u128;
+
+    loop {
+        let power = base.checked_pow(k)?;
+
+        if power > 2 * n {
+            break;
+        }
+
+        let low = power.saturating_sub(n).max(1);
+        let high = ((power - 1) / 2).min(n);
+
+        if low <= high {
+            edges += high - low + 1;
+        }
+
+        base += 1;
+    }
+
+    Some(32 * edges + 8 * n)
+}
+
+fn classify(k: u32, n: usize, max_graph_n: usize) -> Result<Classification, Box<dyn Error>> {
     if let Some(obstruction) = quick_degree_obstruction(k, n)? {
         return Ok(Classification {
             status: ScanStatus::Impossible,
@@ -158,6 +199,34 @@ fn classify(k: u32, n: usize) -> Result<Classification, Box<dyn Error>> {
             source: Some(RejectionSource::QuickDegree),
             graph_built: false,
         });
+    }
+
+    if n > max_graph_n {
+        return Ok(Classification {
+            status: ScanStatus::Unchecked,
+            reason: Some(if max_graph_n == 0 {
+                "graph skipped by --quick-only".to_owned()
+            } else {
+                format!("graph skipped, n exceeds max-graph-n={max_graph_n}")
+            }),
+            source: None,
+            graph_built: false,
+        });
+    }
+
+    /*
+     * The graph stores each edge twice plus a CSR incidence entry, so it is
+     * roughly 32 bytes per edge. At k = 7 the first candidate needs about
+     * 36 GB, which is worth announcing before attempting it.
+     */
+    if let Some(bytes) = estimated_graph_bytes(k, n)
+        && bytes >= LARGE_GRAPH_WARNING_BYTES
+    {
+        eprintln!(
+            "pc-scan: warning: building G_{k}({n}) needs about {:.1} GB; \
+             use --max-graph-n or --quick-only to skip it",
+            bytes as f64 / 1e9
+        );
     }
 
     let graph = PowerGraph::new(k, n)?;
@@ -248,6 +317,8 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
     }
 
     let mut compact = false;
+    let mut max_graph_n = usize::MAX;
+    let mut max_graph_n_seen = false;
     let mut positional = Vec::<&str>::new();
     let mut options_finished = false;
 
@@ -265,8 +336,44 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
                     continue;
                 }
 
+                "--quick-only" => {
+                    if max_graph_n_seen {
+                        return Err(ScanCliError::DuplicateOption {
+                            option: "--quick-only",
+                        });
+                    }
+
+                    max_graph_n_seen = true;
+                    max_graph_n = 0;
+                    continue;
+                }
+
                 "--" => {
                     options_finished = true;
+                    continue;
+                }
+
+                value if value.starts_with("--max-graph-n=") => {
+                    if max_graph_n_seen {
+                        return Err(ScanCliError::DuplicateOption {
+                            option: "--max-graph-n",
+                        });
+                    }
+
+                    let value = value
+                        .strip_prefix("--max-graph-n=")
+                        .expect("matched --max-graph-n= prefix must strip");
+
+                    max_graph_n_seen = true;
+
+                    max_graph_n =
+                        value
+                            .parse::<usize>()
+                            .map_err(|_| ScanCliError::InvalidVertexCount {
+                                name: "max-graph-n",
+                                value: value.to_owned(),
+                            })?;
+
                     continue;
                 }
 
@@ -306,6 +413,7 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
         start,
         end,
         compact,
+        max_graph_n,
     }))
 }
 
@@ -345,17 +453,25 @@ fn print_help() {
          Scan necessary Hamiltonian conditions for power-sum graphs.\n\
          \n\
          Usage:\n\
-           pc-scan [--compact] <k> <n>\n\
-           pc-scan [--compact] <k> <start> <end>\n\
+           pc-scan [OPTIONS] <k> <n>\n\
+           pc-scan [OPTIONS] <k> <start> <end>\n\
          \n\
-         Output:\n\
+         Output, one tab-separated record per n on stdout:\n\
            IMPOSSIBLE  a necessary Hamiltonian condition failed\n\
            CANDIDATE   no implemented necessary obstruction was found\n\
+           UNCHECKED   the graph-free check passed but the full preflight\n\
+                       was skipped, so nothing was really decided\n\
          \n\
          Options:\n\
-           --compact   group consecutive equal statuses into ranges\n\
-           -h, --help  show this help\n\
-           -V, --version  show version\n\
+           --compact            group consecutive equal statuses into ranges\n\
+           --max-graph-n=N      never build a graph beyond n = N\n\
+           --quick-only         never build a graph at all\n\
+           -h, --help           show this help\n\
+           -V, --version        show version\n\
+         \n\
+         The graph-free degree check always runs. Only the values it fails to\n\
+         reject pay for a graph construction and the full preflight, which is\n\
+         what --max-graph-n and --quick-only bound.\n\
          \n\
          CANDIDATE does not prove that a Hamiltonian cycle exists.",
         version = env!("CARGO_PKG_VERSION"),
@@ -366,6 +482,7 @@ fn print_help() {
 enum ScanStatus {
     Impossible,
     Candidate,
+    Unchecked,
 }
 
 impl fmt::Display for ScanStatus {
@@ -374,6 +491,8 @@ impl fmt::Display for ScanStatus {
             Self::Impossible => write!(f, "IMPOSSIBLE"),
 
             Self::Candidate => write!(f, "CANDIDATE"),
+
+            Self::Unchecked => write!(f, "UNCHECKED"),
         }
     }
 }
@@ -406,6 +525,7 @@ struct ScanStats {
     quick_degree_rejections: usize,
     full_preflight_rejections: usize,
     candidates: usize,
+    unchecked: usize,
     graphs_built: usize,
 }
 
@@ -415,6 +535,13 @@ struct ScanOptions {
     start: usize,
     end: usize,
     compact: bool,
+
+    /// Largest `n` for which a graph may be constructed.
+    ///
+    /// The graph-free degree check always runs. Beyond this bound the full
+    /// preflight is skipped and the verdict is `UNCHECKED` rather than
+    /// `CANDIDATE`, because nothing was actually checked.
+    max_graph_n: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,7 +628,39 @@ mod tests {
                 start: 246_877,
                 end: 246_877,
                 compact: false,
+                max_graph_n: usize::MAX,
             })
+        );
+    }
+
+    #[test]
+    fn parses_the_graph_construction_guards() {
+        assert_eq!(
+            parse_arguments(&strings(&["--quick-only", "7", "1", "10"])).unwrap(),
+            Command::Scan(ScanOptions {
+                k: 7,
+                start: 1,
+                end: 10,
+                compact: false,
+                max_graph_n: 0,
+            })
+        );
+
+        assert_eq!(
+            parse_arguments(&strings(&["--max-graph-n=1000", "5", "1", "10"])).unwrap(),
+            Command::Scan(ScanOptions {
+                k: 5,
+                start: 1,
+                end: 10,
+                compact: false,
+                max_graph_n: 1_000,
+            })
+        );
+
+        assert!(parse_arguments(&strings(&["--max-graph-n=x", "5", "1", "10"])).is_err());
+
+        assert!(
+            parse_arguments(&strings(&["--quick-only", "--quick-only", "5", "1", "10"])).is_err()
         );
     }
 
@@ -516,6 +675,7 @@ mod tests {
                 start: 246_876,
                 end: 246_878,
                 compact: true,
+                max_graph_n: usize::MAX,
             })
         );
     }

@@ -144,6 +144,73 @@ fn scan_rejects_invalid_input() {
     }
 }
 
+/// The memory guard must not change what an unguarded scan reports.
+///
+/// The scan certificates in `witness/` were produced without it.
+#[test]
+fn scan_guard_leaves_default_output_untouched() {
+    let plain = run(PC_SCAN, &["5", "246870", "246880"]);
+    let guarded = run(PC_SCAN, &["--max-graph-n=1000000", "5", "246870", "246880"]);
+
+    assert!(plain.status.success() && guarded.status.success());
+    assert_eq!(stdout_of(&plain), stdout_of(&guarded));
+
+    assert!(
+        !stdout_of(&plain).contains("UNCHECKED"),
+        "an unguarded scan never reports UNCHECKED"
+    );
+}
+
+#[test]
+fn scan_quick_only_never_builds_a_graph() {
+    let output = run(PC_SCAN, &["--quick-only", "5", "246876", "246878"]);
+
+    assert!(output.status.success());
+
+    assert_eq!(
+        stdout_of(&output).lines().collect::<Vec<_>>(),
+        vec![
+            "246876\tIMPOSSIBLE\tdegree<2 vertex=124416 degree=1",
+            "246877\tUNCHECKED\tgraph skipped by --quick-only",
+            "246878\tUNCHECKED\tgraph skipped by --quick-only",
+        ],
+    );
+
+    let stderr = std::str::from_utf8(&output.stderr).unwrap();
+
+    assert!(
+        stderr.contains("graphs built         : 0"),
+        "--quick-only must build no graph"
+    );
+}
+
+/// The whole point of the guard: k = 7 reaches its first candidate at
+/// n = 587761723, where a graph would need roughly 36 GB.
+#[test]
+fn scan_guard_survives_an_unbuildable_candidate() {
+    let output = run(
+        PC_SCAN,
+        &["--quick-only", "--compact", "7", "587761722", "587761724"],
+    );
+
+    assert!(output.status.success());
+
+    assert_eq!(
+        stdout_of(&output).lines().collect::<Vec<_>>(),
+        vec!["587761722\tIMPOSSIBLE", "587761723..587761724\tUNCHECKED"],
+    );
+}
+
+#[test]
+fn scan_rejects_a_duplicated_guard() {
+    let output = run(
+        PC_SCAN,
+        &["--quick-only", "--max-graph-n=10", "5", "1", "10"],
+    );
+
+    assert!(!output.status.success());
+}
+
 #[test]
 fn export_rejects_a_missing_dump() {
     let output = run(PC_EXPORT, &["/nonexistent/dump.pcdump.json"]);
