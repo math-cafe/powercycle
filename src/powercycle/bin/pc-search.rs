@@ -312,6 +312,10 @@ fn run_search(
 
             report(run, "  repair         : disabled")?;
         }
+
+        PatchMode::None => {
+            report(run, "  every SAT tour : raw factor only, no patching")?;
+        }
     }
 
     report(run, format!("  dump policy    : {}", problem.dump_policy))?;
@@ -345,6 +349,14 @@ fn run_search(
 
         (PatchMode::ProbeOnly, DumpPolicy::Never) => {
             report(run, "  dumps          : disabled")?;
+        }
+
+        (PatchMode::None, DumpPolicy::Never) => {
+            report(run, "  dumps          : disabled, checkpoint only")?;
+        }
+
+        (PatchMode::None, _) => {
+            report(run, "  dumps          : raw SAT factor")?;
         }
     }
 
@@ -557,16 +569,24 @@ fn run_search(
             &patched_decomposition,
         )?;
 
-        if problem.patch_mode == PatchMode::Full {
+        if problem.patch_mode != PatchMode::ProbeOnly {
             let patched_hamiltonian = patched_decomposition.is_hamiltonian();
 
-            let save_patched = match problem.dump_policy {
-                DumpPolicy::Always => true,
+            /*
+             * With patching disabled the patched factor is the raw factor,
+             * so only the raw dump is worth writing. It still has to be
+             * written: the checkpoint uses a stable name and every tour
+             * overwrites it, whereas capturing factors is the whole point
+             * of that mode.
+             */
+            let save_patched = problem.patch_mode == PatchMode::Full
+                && match problem.dump_policy {
+                    DumpPolicy::Always => true,
 
-                DumpPolicy::Records => patched_update.any() || patched_hamiltonian,
+                    DumpPolicy::Records => patched_update.any() || patched_hamiltonian,
 
-                DumpPolicy::Never => false,
-            };
+                    DumpPolicy::Never => false,
+                };
 
             let save_raw = match problem.dump_policy {
                 DumpPolicy::Always => true,
@@ -1054,6 +1074,20 @@ fn patch_to_local_closure(
     let mut current = Factor::new(graph, factor.selected_edges().to_vec())?;
 
     let mut history = Vec::<MoveRecord>::new();
+
+    if patch_mode == PatchMode::None {
+        report(run, "  patch          : disabled, raw factor kept as is")?;
+
+        return Ok(PatchClosureResult {
+            interrupted: false,
+            factor: current,
+            history,
+            passes: 0,
+            one_one_one_moves: 0,
+            two_one_moves: 0,
+            alternating_repairs: 0,
+        });
+    }
 
     let mut pass = 1usize;
     let mut total_111_moves = 0usize;
@@ -1728,6 +1762,13 @@ impl PatchClosureResult {
 enum PatchMode {
     Full,
     ProbeOnly,
+
+    /// Solve, persist, stop. Nothing is patched.
+    ///
+    /// Exists so that capturing an expensive SAT factor is an unattended
+    /// operation: at k = 6 the solve takes over four hours and the patch
+    /// that follows it can run for days.
+    None,
 }
 
 impl fmt::Display for PatchMode {
@@ -1736,6 +1777,8 @@ impl fmt::Display for PatchMode {
             Self::Full => write!(f, "full"),
 
             Self::ProbeOnly => write!(f, "probe-only"),
+
+            Self::None => write!(f, "none"),
         }
     }
 }
@@ -1859,7 +1902,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
     let mut positional = Vec::<&str>::new();
 
     let mut patch_mode = PatchMode::Full;
-    let mut probe_only_seen = false;
+    let mut patch_mode_seen = false;
     let mut propagated_units = false;
     let mut propagated_units_seen = false;
     let mut repair_max_depth = DEFAULT_REPAIR_MAX_DEPTH;
@@ -1882,14 +1925,25 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
                 propagated_units = true;
             }
 
+            "--no-patch" => {
+                if patch_mode_seen {
+                    return Err(CliError::DuplicateOption {
+                        option: "--no-patch",
+                    });
+                }
+
+                patch_mode_seen = true;
+                patch_mode = PatchMode::None;
+            }
+
             "--probe-only" => {
-                if probe_only_seen {
+                if patch_mode_seen {
                     return Err(CliError::DuplicateOption {
                         option: "--probe-only",
                     });
                 }
 
-                probe_only_seen = true;
+                patch_mode_seen = true;
                 patch_mode = PatchMode::ProbeOnly;
             }
 
@@ -2011,7 +2065,7 @@ fn parse_problem(arguments: &[String]) -> Result<Problem, CliError> {
     }
 
     let dump_policy = dump_policy.unwrap_or(match patch_mode {
-        PatchMode::Full => DumpPolicy::Records,
+        PatchMode::Full | PatchMode::None => DumpPolicy::Records,
         PatchMode::ProbeOnly => DumpPolicy::Always,
     });
 
@@ -2067,7 +2121,7 @@ impl fmt::Display for CliError {
             Self::Usage => {
                 write!(
                     f,
-                    "usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                    "usage: pc-search [--probe-only|--no-patch] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -2075,7 +2129,7 @@ impl fmt::Display for CliError {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-search [--probe-only] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
+                     usage: pc-search [--probe-only|--no-patch] [--propagated-units] [--max-depth=N] [--checkpoint-secs=N] [--dump=always|records|never] [--on-hamiltonian=stop|continue] <k> <n> [max-tours]"
                 )
             }
 
@@ -2211,6 +2265,40 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn parses_no_patch() {
+        assert_eq!(
+            parse_problem(&args(&["--no-patch", "6", "15748961", "1"])),
+            Ok(Problem {
+                k: 6,
+                n: 15_748_961,
+                max_tours: 1,
+                patch_mode: PatchMode::None,
+                dump_policy: DumpPolicy::Records,
+                hamiltonian_policy: HamiltonianPolicy::Stop,
+                propagated_units: false,
+                repair_max_depth: DEFAULT_REPAIR_MAX_DEPTH,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_conflicting_patch_modes() {
+        assert!(parse_problem(&args(&["--no-patch", "--probe-only", "5", "31"])).is_err());
+        assert!(parse_problem(&args(&["--no-patch", "--no-patch", "5", "31"])).is_err());
+    }
+
+    #[test]
+    fn parses_the_checkpoint_interval() {
+        let problem = parse_problem(&args(&["--checkpoint-secs=30", "5", "31"])).unwrap();
+
+        assert_eq!(problem.checkpoint_every, Duration::from_secs(30));
+
+        assert!(parse_problem(&args(&["--checkpoint-secs=0", "5", "31"])).is_err());
+        assert!(parse_problem(&args(&["--checkpoint-secs=x", "5", "31"])).is_err());
+    }
+
     fn parses_probe_only_before_problem() {
         assert_eq!(
             parse_problem(&args(&["--probe-only", "5", "490463", "100",],)),

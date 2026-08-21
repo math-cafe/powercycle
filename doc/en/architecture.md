@@ -181,7 +181,7 @@ subtour-elimination cuts, and applies the patching operators to each raw factor
 in search of a single cycle.
 
 ```console
-pc-search [--probe-only] [--propagated-units] [--max-depth=N]
+pc-search [--probe-only | --no-patch] [--propagated-units] [--max-depth=N]
           [--checkpoint-secs=N] [--dump=always|records|never]
           [--on-hamiltonian=stop|continue] <k> <n> [max-tours]
 ```
@@ -189,6 +189,11 @@ pc-search [--probe-only] [--propagated-units] [--max-depth=N]
 `--max-depth` bounds the alternating repair, matching the `pc-patch` flag of
 the same name. `--checkpoint-secs` sets how often a long patch phase yields to
 be persisted; the default is 600.
+
+`--no-patch` solves, persists the raw factor and stops. Capturing an expensive
+SAT factor becomes an unattended operation, which matters when the solve takes
+hours and the patching that follows it can take days. Work on the factor then
+continues offline with `pc-patch`.
 
 ### `pc-patch`
 
