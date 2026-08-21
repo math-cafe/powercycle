@@ -24,3 +24,8 @@ __pycache__/
 
 # powercycle
 /cycle.txt
+
+# Bulk cycle archives kept in the working tree.
+# Witnesses belong in witness/, compressed and checksummed.
+/*.tar
+/*.tar.*
