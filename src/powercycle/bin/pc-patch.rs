@@ -3,13 +3,20 @@ use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Instant;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 use powercycle_format::{Dump, MoveRecord, Provenance};
-use powercycle_patch::{find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111};
+use powercycle_patch::{
+    AlternatingRepairError, find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111,
+};
 
 const DEFAULT_MAX_DEPTH: usize = 3;
+
+/// How often a long phase yields so its progress can be persisted.
+const DEFAULT_CHECKPOINT_SECS: u64 = 600;
 
 fn main() -> ExitCode {
     match run() {
@@ -47,11 +54,35 @@ fn run() -> Result<(), Box<dyn Error>> {
         options.max_depth
     );
 
+    let interrupt = Arc::new(AtomicBool::new(false));
+
+    install_interrupt_handler(Arc::clone(&interrupt))?;
+
+    let session = Session {
+        interrupt,
+        every: options.checkpoint_every,
+        directory: options
+            .input
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf(),
+    };
+
+    eprintln!(
+        "pc-patch: checkpoint every {} s into {}",
+        session.every.as_secs(),
+        session.directory.display()
+    );
+
     let start = Instant::now();
 
-    let patch = patch_to_local_closure(&graph, &base_factor, options.max_depth)?;
+    let patch = patch_to_local_closure(&session, &graph, &base_factor, options.max_depth)?;
 
     let elapsed = start.elapsed();
+
+    if patch.interrupted {
+        eprintln!("pc-patch: stopped before closure; state checkpointed");
+    }
 
     let final_decomposition = CycleDecomposition::new(&graph, &patch.factor)?;
 
@@ -119,7 +150,119 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Where and how often a long phase persists its progress.
+///
+/// pc-patch is the tool used to work on an expensive factor offline, so a
+/// run of it can last hours. Losing all of it to an interruption is the same
+/// mistake pc-search used to make.
+struct Session {
+    interrupt: Arc<AtomicBool>,
+    every: Duration,
+    directory: PathBuf,
+}
+
+impl Session {
+    fn interrupted(&self) -> bool {
+        self.interrupt.load(Ordering::SeqCst)
+    }
+}
+
+/// One greedy phase: consumes the current factor and a stop predicate, yields
+/// the number of atomic moves performed and the resulting factor.
+type GreedyStep<'a> =
+    dyn Fn(&Factor, &dyn Fn() -> bool) -> Result<(usize, Factor), Box<dyn Error>> + 'a;
+
+fn install_interrupt_handler(interrupt: Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
+    let count = Arc::new(AtomicUsize::new(0));
+
+    ctrlc::set_handler(move || {
+        if count.fetch_add(1, Ordering::SeqCst) == 0 {
+            interrupt.store(true, Ordering::SeqCst);
+
+            eprintln!(
+                "pc-patch: Ctrl-C: graceful stop requested; \
+                 press Ctrl-C again to force exit"
+            );
+        } else {
+            eprintln!("pc-patch: Ctrl-C: forcing immediate exit");
+
+            std::process::exit(130);
+        }
+    })?;
+
+    Ok(())
+}
+
+/// Persists the current factor next to the input dump.
+///
+/// Written through a temporary file and renamed, because a truncated
+/// checkpoint is worse than no checkpoint.
+fn write_checkpoint(
+    session: &Session,
+    graph: &PowerGraph,
+    factor: &Factor,
+    stage: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut provenance = Provenance::new("pc-patch", env!("CARGO_PKG_VERSION"));
+
+    provenance.reason = vec!["checkpoint".to_owned(), stage.to_owned()];
+
+    let dump = Dump::new(graph, factor, factor, provenance, Vec::new())?;
+
+    let final_path = session
+        .directory
+        .join(format!("pc-patch-{stage}.pcdump.json"));
+
+    let temporary_path = session
+        .directory
+        .join(format!("pc-patch-{stage}.pcdump.json.partial"));
+
+    dump.write(&temporary_path)?;
+
+    std::fs::rename(&temporary_path, &final_path)?;
+
+    Ok(())
+}
+
+/// Runs one greedy phase, surrendering periodically so it can be checkpointed.
+fn run_greedy_phase(
+    session: &Session,
+    graph: &PowerGraph,
+    current: &mut Factor,
+    stage: &str,
+    step: &GreedyStep<'_>,
+) -> Result<(usize, bool), Box<dyn Error>> {
+    let mut total = 0usize;
+
+    loop {
+        let deadline = Instant::now() + session.every;
+
+        let stop = || session.interrupted() || Instant::now() >= deadline;
+
+        let (moves, next) = step(current, &stop)?;
+
+        let timed_out = Instant::now() >= deadline;
+
+        *current = next;
+        total += moves;
+
+        if session.interrupted() {
+            write_checkpoint(session, graph, current, stage)?;
+            return Ok((total, true));
+        }
+
+        if !timed_out {
+            return Ok((total, false));
+        }
+
+        write_checkpoint(session, graph, current, stage)?;
+
+        eprintln!("pc-patch:   checkpoint: {stage}, {total} moves so far");
+    }
+}
+
 fn patch_to_local_closure(
+    session: &Session,
     graph: &PowerGraph,
     factor: &Factor,
     max_depth: usize,
@@ -143,13 +286,14 @@ fn patch_to_local_closure(
 
         let before_111 = clone_factor(graph, &current)?;
 
-        let one_one_one = greedy_three_opt_111(graph, &current, &|| false)?;
+        let (one_one_one_moves, one_one_one_stopped) =
+            run_greedy_phase(session, graph, &mut current, "111", &|factor, stop| {
+                let result = greedy_three_opt_111(graph, factor, stop)?;
 
-        let one_one_one_moves = one_one_one.move_count();
+                Ok((result.move_count(), result.into_factor()))
+            })?;
 
         total_111_moves += one_one_one_moves;
-
-        current = one_one_one.into_factor();
 
         if one_one_one_moves > 0 {
             history.push(difference_record(
@@ -171,10 +315,25 @@ fn patch_to_local_closure(
             phase_start.elapsed().as_secs_f64()
         );
 
+        if one_one_one_stopped {
+            eprintln!("pc-patch:   closure: interrupted during 1+1+1");
+
+            return Ok(PatchResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
+
         if after_111.is_hamiltonian() {
             eprintln!("pc-patch:   closure: Hamiltonian after 1+1+1");
 
             return Ok(PatchResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -191,13 +350,14 @@ fn patch_to_local_closure(
 
         let before_21 = clone_factor(graph, &current)?;
 
-        let two_one = greedy_three_opt_21(graph, &current, &|| false)?;
+        let (two_one_moves, two_one_stopped) =
+            run_greedy_phase(session, graph, &mut current, "21", &|factor, stop| {
+                let result = greedy_three_opt_21(graph, factor, stop)?;
 
-        let two_one_moves = two_one.move_count();
+                Ok((result.move_count(), result.into_factor()))
+            })?;
 
         total_21_moves += two_one_moves;
-
-        current = two_one.into_factor();
 
         if two_one_moves > 0 {
             history.push(difference_record(
@@ -219,10 +379,25 @@ fn patch_to_local_closure(
             phase_start.elapsed().as_secs_f64()
         );
 
+        if two_one_stopped {
+            eprintln!("pc-patch:   closure: interrupted during 2+1");
+
+            return Ok(PatchResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
+
         if after_21.is_hamiltonian() {
             eprintln!("pc-patch:   closure: Hamiltonian after 2+1");
 
             return Ok(PatchResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -240,7 +415,28 @@ fn patch_to_local_closure(
 
         eprintln!("pc-patch:   repair: searching depth <= {}", max_depth);
 
-        let repair = find_alternating_repair(graph, &current, max_depth, &|| false)?;
+        let repair =
+            match find_alternating_repair(graph, &current, max_depth, &|| session.interrupted()) {
+                Ok(found) => found,
+
+                Err(AlternatingRepairError::Interrupted) => {
+                    write_checkpoint(session, graph, &current, "repair")?;
+
+                    eprintln!("pc-patch:   closure: interrupted during alternating repair");
+
+                    return Ok(PatchResult {
+                        interrupted: true,
+                        factor: current,
+                        history,
+                        passes: pass,
+                        one_one_one_moves: total_111_moves,
+                        two_one_moves: total_21_moves,
+                        alternating_repairs,
+                    });
+                }
+
+                Err(error) => return Err(Box::new(error)),
+            };
 
         let Some(repair) = repair else {
             eprintln!(
@@ -251,6 +447,7 @@ fn patch_to_local_closure(
             eprintln!("pc-patch:   closure: local fixed point");
 
             return Ok(PatchResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -292,6 +489,7 @@ fn patch_to_local_closure(
             eprintln!("pc-patch:   closure: Hamiltonian after alternating repair");
 
             return Ok(PatchResult {
+                interrupted: false,
                 factor: current,
                 history,
                 passes: pass,
@@ -410,6 +608,7 @@ fn satellite_stats(decomposition: &CycleDecomposition) -> (usize, Option<usize>,
 
 #[derive(Debug)]
 struct PatchResult {
+    interrupted: bool,
     factor: Factor,
     history: Vec<MoveRecord>,
     passes: usize,
@@ -422,17 +621,42 @@ struct PatchResult {
 struct Options {
     input: PathBuf,
     max_depth: usize,
+    checkpoint_every: Duration,
 }
 
 fn parse_arguments(arguments: &[String]) -> Result<Options, PatchCliError> {
     let mut input = None::<PathBuf>;
     let mut max_depth = DEFAULT_MAX_DEPTH;
     let mut max_depth_seen = false;
+    let mut checkpoint_secs = DEFAULT_CHECKPOINT_SECS;
+    let mut checkpoint_secs_seen = false;
 
     let mut index = 0usize;
 
     while index < arguments.len() {
         let argument = &arguments[index];
+
+        if let Some(value) = argument.strip_prefix("--checkpoint-secs=") {
+            if checkpoint_secs_seen {
+                return Err(PatchCliError::DuplicateOption {
+                    option: "--checkpoint-secs",
+                });
+            }
+
+            checkpoint_secs = value
+                .parse::<u64>()
+                .map_err(|_| PatchCliError::InvalidDepth {
+                    value: value.to_owned(),
+                })?;
+
+            if checkpoint_secs == 0 {
+                return Err(PatchCliError::DepthZero);
+            }
+
+            checkpoint_secs_seen = true;
+            index += 1;
+            continue;
+        }
 
         if let Some(value) = argument.strip_prefix("--max-depth=") {
             if max_depth_seen {
@@ -487,7 +711,11 @@ fn parse_arguments(arguments: &[String]) -> Result<Options, PatchCliError> {
         return Err(PatchCliError::Usage);
     };
 
-    Ok(Options { input, max_depth })
+    Ok(Options {
+        input,
+        max_depth,
+        checkpoint_every: Duration::from_secs(checkpoint_secs),
+    })
 }
 
 fn parse_depth(value: &str) -> Result<usize, PatchCliError> {
@@ -525,14 +753,17 @@ impl fmt::Display for PatchCliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage => {
-                write!(f, "usage: pc-patch [--max-depth=N] <dump.pcdump.json>")
+                write!(
+                    f,
+                    "usage: pc-patch [--max-depth=N] [--checkpoint-secs=N] <dump.pcdump.json>"
+                )
             }
 
             Self::UnknownOption { value } => {
                 write!(
                     f,
                     "unknown option {value:?}; \
-                     usage: pc-patch [--max-depth=N] <dump.pcdump.json>"
+                     usage: pc-patch [--max-depth=N] [--checkpoint-secs=N] <dump.pcdump.json>"
                 )
             }
 
@@ -584,6 +815,7 @@ mod tests {
             Ok(Options {
                 input: PathBuf::from("candidate.pcdump.json"),
                 max_depth: 3,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -595,6 +827,7 @@ mod tests {
             Ok(Options {
                 input: PathBuf::from("candidate.pcdump.json"),
                 max_depth: 5,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }
@@ -606,6 +839,7 @@ mod tests {
             Ok(Options {
                 input: PathBuf::from("candidate.pcdump.json"),
                 max_depth: 4,
+                checkpoint_every: Duration::from_secs(DEFAULT_CHECKPOINT_SECS),
             })
         );
     }

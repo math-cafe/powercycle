@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use powercycle_core::{CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
+use powercycle_core::{Cycle, CycleDecomposition, EdgeId, Factor, FactorError, PowerGraph, Vertex};
 
 /// A 3-opt `1+1+1` move.
 ///
@@ -190,49 +190,69 @@ impl GreedyThreeOpt111Result {
 ///
 /// This avoids enumerating triples of cycles explicitly and exploits the low
 /// average degree of power-sum graphs.
-pub fn find_three_opt_111(
-    graph: &PowerGraph,
-    factor: &Factor,
-) -> Result<Option<ThreeOpt111Move>, PatchError> {
-    factor
-        .validate_two_factor(graph)
-        .map_err(PatchError::Factor)?;
+/// State shared by every candidate search over one decomposition.
+///
+/// Built once per scan: rebuilding it per move is what made the phase cost a
+/// full pass over the factor for every atomic move.
+struct Scan<'a> {
+    graph: &'a PowerGraph,
+    factor: &'a Factor,
+    cycle_of: Vec<usize>,
+    selected_neighbors: Vec<Option<[Vertex; 2]>>,
+}
 
-    let decomposition =
-        CycleDecomposition::new(graph, factor).map_err(|error| PatchError::Decomposition {
-            operation: "decompose factor",
-            message: error.to_string(),
-        })?;
+impl<'a> Scan<'a> {
+    fn new(graph: &'a PowerGraph, factor: &'a Factor, decomposition: &CycleDecomposition) -> Self {
+        let mut cycle_of = vec![usize::MAX; graph.vertex_count()];
 
-    if decomposition.cycle_count() < 3 {
-        return Ok(None);
-    }
+        let mut selected_neighbors = vec![None; graph.vertex_count()];
 
-    let mut cycle_of = vec![usize::MAX; graph.vertex_count()];
+        for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
+            let vertices = cycle.vertices();
 
-    let mut selected_neighbors = vec![None; graph.vertex_count()];
+            for index in 0..vertices.len() {
+                let vertex = vertices[index];
 
-    for (cycle_index, cycle) in decomposition.cycles().iter().enumerate() {
-        let vertices = cycle.vertices();
+                let previous = vertices[if index == 0 {
+                    vertices.len() - 1
+                } else {
+                    index - 1
+                }];
 
-        for index in 0..vertices.len() {
-            let vertex = vertices[index];
+                let next = vertices[(index + 1) % vertices.len()];
 
-            let previous = vertices[if index == 0 {
-                vertices.len() - 1
-            } else {
-                index - 1
-            }];
+                cycle_of[vertex.index()] = cycle_index;
 
-            let next = vertices[(index + 1) % vertices.len()];
+                selected_neighbors[vertex.index()] = Some([previous, next]);
+            }
+        }
 
-            cycle_of[vertex.index()] = cycle_index;
-
-            selected_neighbors[vertex.index()] = Some([previous, next]);
+        Self {
+            graph,
+            factor,
+            cycle_of,
+            selected_neighbors,
         }
     }
 
-    for (first_cycle_index, first_cycle) in decomposition.cycles().iter().enumerate() {
+    /// First move merging `first_cycle` with two others, in deterministic
+    /// order.
+    ///
+    /// `reserved`, when supplied, marks cycles already claimed by moves
+    /// chosen earlier in the same batch.
+    fn first_move_from(
+        &self,
+        first_cycle_index: usize,
+        first_cycle: &Cycle,
+        reserved: Option<&[bool]>,
+    ) -> Result<Option<ThreeOpt111Move>, PatchError> {
+        let graph = self.graph;
+        let factor = self.factor;
+        let cycle_of = &self.cycle_of;
+        let selected_neighbors = &self.selected_neighbors;
+
+        let claimed = |cycle_index: usize| reserved.is_some_and(|taken| taken[cycle_index]);
+
         let vertices = first_cycle.vertices();
 
         for index in 0..vertices.len() {
@@ -255,7 +275,7 @@ pub fn find_three_opt_111(
 
                 let second_cycle_index = cycle_of[c.index()];
 
-                if second_cycle_index == first_cycle_index {
+                if second_cycle_index == first_cycle_index || claimed(second_cycle_index) {
                     continue;
                 }
 
@@ -280,6 +300,7 @@ pub fn find_three_opt_111(
 
                         if third_cycle_index == first_cycle_index
                             || third_cycle_index == second_cycle_index
+                            || claimed(third_cycle_index)
                         {
                             continue;
                         }
@@ -312,9 +333,97 @@ pub fn find_three_opt_111(
                 }
             }
         }
+
+        Ok(None)
+    }
+}
+
+pub fn find_three_opt_111(
+    graph: &PowerGraph,
+    factor: &Factor,
+) -> Result<Option<ThreeOpt111Move>, PatchError> {
+    factor
+        .validate_two_factor(graph)
+        .map_err(PatchError::Factor)?;
+
+    let decomposition =
+        CycleDecomposition::new(graph, factor).map_err(|error| PatchError::Decomposition {
+            operation: "decompose factor",
+            message: error.to_string(),
+        })?;
+
+    if decomposition.cycle_count() < 3 {
+        return Ok(None);
+    }
+
+    let scan = Scan::new(graph, factor, &decomposition);
+
+    for (first_cycle_index, first_cycle) in decomposition.cycles().iter().enumerate() {
+        if let Some(movement) = scan.first_move_from(first_cycle_index, first_cycle, None)? {
+            return Ok(Some(movement));
+        }
     }
 
     Ok(None)
+}
+
+/// Finds pairwise independent 1+1+1 moves in a single scan.
+///
+/// A move merges three distinct cycles, so two moves are independent exactly
+/// when their triples are disjoint. Collecting candidates is cheap here -
+/// unlike the alternating repair there is no search to run per candidate - so
+/// one scan can harvest many and pay a single factor rebuild instead of one
+/// per move.
+fn find_three_opt_111_batch(
+    graph: &PowerGraph,
+    factor: &Factor,
+    stop: &dyn Fn() -> bool,
+) -> Result<Vec<ThreeOpt111Move>, PatchError> {
+    let decomposition =
+        CycleDecomposition::new(graph, factor).map_err(|error| PatchError::Decomposition {
+            operation: "decompose factor",
+            message: error.to_string(),
+        })?;
+
+    if decomposition.cycle_count() < 3 {
+        return Ok(Vec::new());
+    }
+
+    let scan = Scan::new(graph, factor, &decomposition);
+
+    let mut reserved = vec![false; decomposition.cycle_count()];
+
+    let mut moves = Vec::new();
+
+    for (first_cycle_index, first_cycle) in decomposition.cycles().iter().enumerate() {
+        if stop() {
+            break;
+        }
+
+        if reserved[first_cycle_index] {
+            continue;
+        }
+
+        let Some(movement) =
+            scan.first_move_from(first_cycle_index, first_cycle, Some(&reserved))?
+        else {
+            continue;
+        };
+
+        for &edge_id in movement.removed() {
+            let edge = graph
+                .edge(edge_id)
+                .expect("a move edge must belong to the graph");
+
+            let (vertex, _) = edge.endpoints();
+
+            reserved[scan.cycle_of[vertex.index()]] = true;
+        }
+
+        moves.push(movement);
+    }
+
+    Ok(moves)
 }
 
 /// Repeatedly applies the first deterministic 3-opt `1+1+1` move until no
@@ -331,6 +440,66 @@ pub fn find_three_opt_111(
 /// `stop` is polled between atomic moves. Returning `true` ends the phase
 /// early and yields whatever was achieved so far, which lets a caller both
 /// honour an interruption and checkpoint a long-running phase.
+/// Applies independent moves in a single rebuild.
+///
+/// Returns `None` when the result is not a valid 2-factor with exactly two
+/// fewer cycles per move, which tells the caller to fall back to applying
+/// them one at a time.
+fn apply_batch(
+    graph: &PowerGraph,
+    factor: &Factor,
+    moves: &[ThreeOpt111Move],
+    cycles_before: usize,
+) -> Result<Option<Factor>, PatchError> {
+    let mut selected = vec![false; graph.edge_count()];
+
+    for &edge_id in factor.selected_edges() {
+        selected[edge_id.index()] = true;
+    }
+
+    for movement in moves {
+        for &edge_id in movement.removed() {
+            if !selected[edge_id.index()] {
+                return Ok(None);
+            }
+
+            selected[edge_id.index()] = false;
+        }
+
+        for &edge_id in movement.added() {
+            if selected[edge_id.index()] {
+                return Ok(None);
+            }
+
+            selected[edge_id.index()] = true;
+        }
+    }
+
+    let edges = selected
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, is_selected)| is_selected.then_some(EdgeId::from_index(index)))
+        .collect::<Vec<_>>();
+
+    let candidate = Factor::new(graph, edges).map_err(PatchError::Factor)?;
+
+    if candidate.validate_two_factor(graph).is_err() {
+        return Ok(None);
+    }
+
+    let after =
+        CycleDecomposition::new(graph, &candidate).map_err(|error| PatchError::Decomposition {
+            operation: "decompose batched factor",
+            message: error.to_string(),
+        })?;
+
+    if cycles_before.saturating_sub(after.cycle_count()) != 2 * moves.len() {
+        return Ok(None);
+    }
+
+    Ok(Some(candidate))
+}
+
 pub fn greedy_three_opt_111(
     graph: &PowerGraph,
     factor: &Factor,
@@ -351,14 +520,36 @@ pub fn greedy_three_opt_111(
     let mut current =
         Factor::new(graph, factor.selected_edges().to_vec()).map_err(PatchError::Factor)?;
 
+    let mut cycle_count = initial_cycle_count;
+
     let mut moves = Vec::<ThreeOpt111Move>::new();
 
     while !stop() {
-        let Some(movement) = find_three_opt_111(graph, &current)? else {
+        let batch = find_three_opt_111_batch(graph, &current, stop)?;
+
+        if batch.is_empty() {
             break;
-        };
+        }
+
+        if let Some(next) = apply_batch(graph, &current, &batch, cycle_count)? {
+            cycle_count -= 2 * batch.len();
+            current = next;
+            moves.extend(batch);
+            continue;
+        }
+
+        /*
+         * The batch did not compose. Keep only its first move, which is what
+         * an unbatched pass would have chosen anyway, and rescan.
+         */
+        let movement = batch
+            .into_iter()
+            .next()
+            .expect("a non-empty batch has a first move");
 
         current = movement.apply(graph, &current)?;
+
+        cycle_count -= 2;
 
         moves.push(movement);
     }
