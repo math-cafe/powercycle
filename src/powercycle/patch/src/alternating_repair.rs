@@ -251,14 +251,41 @@ pub fn find_alternating_repair(
 
     let mut in_giant = vec![false; graph.vertex_count()];
 
+    let mut neighbours = vec![[0u32; 2]; graph.vertex_count()];
+
+    for cycle in decomposition.cycles() {
+        let vertices = cycle.vertices();
+
+        for position in 0..vertices.len() {
+            let vertex = vertices[position];
+
+            let previous = vertices[if position == 0 {
+                vertices.len() - 1
+            } else {
+                position - 1
+            }];
+
+            let next = vertices[(position + 1) % vertices.len()];
+
+            neighbours[vertex.index()] = [previous.index() as u32, next.index() as u32];
+        }
+    }
+
     for &vertex in decomposition.largest_cycle().vertices() {
         in_giant[vertex.index()] = true;
     }
 
-    let search = RepairSearch {
-        graph,
+    let view = DecomposedFactor {
         factor,
         in_giant: &in_giant,
+        neighbours: &neighbours,
+        giant_representative: decomposition.largest_cycle().vertices()[0].index() as u32,
+        giant_size: decomposition.largest_cycle().len(),
+    };
+
+    let search = RepairSearch {
+        graph,
+        factor: &view,
         max_depth,
     };
 
@@ -290,13 +317,13 @@ pub fn find_alternating_repair(
                     .expect("satellite vertex must belong to graph");
 
                 for &left_cross in left_incident {
-                    if factor.contains(left_cross) {
+                    if search.factor.contains(left_cross) {
                         continue;
                     }
 
                     let giant_left = other_vertex(graph, left_cross, satellite_left)?;
 
-                    if !in_giant[giant_left.index()] {
+                    if !search.factor.in_giant(giant_left) {
                         continue;
                     }
 
@@ -305,13 +332,13 @@ pub fn find_alternating_repair(
                         .expect("satellite vertex must belong to graph");
 
                     for &right_cross in right_incident {
-                        if factor.contains(right_cross) {
+                        if search.factor.contains(right_cross) {
                             continue;
                         }
 
                         let giant_right = other_vertex(graph, right_cross, satellite_right)?;
 
-                        if !in_giant[giant_right.index()] {
+                        if !search.factor.in_giant(giant_right) {
                             continue;
                         }
 
@@ -320,7 +347,7 @@ pub fn find_alternating_repair(
                             .expect("giant vertex must belong to graph");
 
                         for &removed_left in giant_left_incident {
-                            if !factor.contains(removed_left) {
+                            if !search.factor.contains(removed_left) {
                                 continue;
                             }
 
@@ -329,7 +356,7 @@ pub fn find_alternating_repair(
                                 .expect("giant vertex must belong to graph");
 
                             for &removed_right in giant_right_incident {
-                                if !factor.contains(removed_right) {
+                                if !search.factor.contains(removed_right) {
                                     continue;
                                 }
 
@@ -484,14 +511,225 @@ pub fn greedy_alternating_repair(
     })
 }
 
-struct RepairSearch<'a> {
-    graph: &'a PowerGraph,
+/// The three things the repair search asks of a 2-factor.
+///
+/// Keeping the surface this narrow is what lets the same search run over a
+/// `Factor` plus a decomposition, or over an incrementally maintained
+/// [`WorkingFactor`](crate::WorkingFactor).
+pub trait FactorView {
+    fn contains(&self, edge_id: EdgeId) -> bool;
+
+    fn in_giant(&self, vertex: Vertex) -> bool;
+
+    /// Whether the candidate would absorb exactly one satellite.
+    ///
+    /// The search asks this of every closing candidate it reaches, seven
+    /// times per repair on average, so how it is answered dominates the cost
+    /// of a repair.
+    fn absorbs(
+        &self,
+        graph: &PowerGraph,
+        movement: &AlternatingRepairMove,
+    ) -> Result<bool, AlternatingRepairError>;
+}
+
+/// A `Factor` paired with the giant membership derived from a decomposition.
+struct DecomposedFactor<'a> {
     factor: &'a Factor,
     in_giant: &'a [bool],
+
+    /// The two selected neighbours of each vertex, by vertex index.
+    neighbours: &'a [[u32; 2]],
+
+    giant_representative: u32,
+    giant_size: usize,
+}
+
+impl FactorView for DecomposedFactor<'_> {
+    fn contains(&self, edge_id: EdgeId) -> bool {
+        self.factor.contains(edge_id)
+    }
+
+    fn in_giant(&self, vertex: Vertex) -> bool {
+        self.in_giant[vertex.index()]
+    }
+
+    /// Answers by walking the cycle the move would produce.
+    ///
+    /// The move re-links a handful of vertices, so the outcome is decided by
+    /// following the giant with a small override table for those vertices and
+    /// checking that the walk covers the giant and the satellite exactly
+    /// once. Nothing is rebuilt, nothing is sorted, nothing is mutated.
+    ///
+    /// The previous implementation called `AlternatingRepairMove::apply`,
+    /// which rebuilds a `Factor` — sorting 15.7 million edge ids on `G_6` —
+    /// and the search reaches this point about seven times per repair.
+    fn absorbs(
+        &self,
+        graph: &PowerGraph,
+        movement: &AlternatingRepairMove,
+    ) -> Result<bool, AlternatingRepairError> {
+        let verdict = self.absorbs_by_traversal(graph, movement)?;
+
+        debug_assert_eq!(
+            verdict,
+            movement.apply(graph, self.factor).is_ok(),
+            "traversal test disagrees with a full apply"
+        );
+
+        Ok(verdict)
+    }
+}
+
+impl DecomposedFactor<'_> {
+    fn absorbs_by_traversal(
+        &self,
+        graph: &PowerGraph,
+        movement: &AlternatingRepairMove,
+    ) -> Result<bool, AlternatingRepairError> {
+        let mut touched = Vec::<u32>::with_capacity(16);
+
+        let mut satellite_seed = None;
+
+        for &edge_id in movement.removed().iter().chain(movement.added()) {
+            let edge = required_graph_edge(graph, edge_id)?;
+
+            let (first, second) = edge.endpoints();
+
+            for vertex in [first, second] {
+                let index = vertex.index() as u32;
+
+                if !touched.contains(&index) {
+                    touched.push(index);
+                }
+
+                if !self.in_giant[vertex.index()] {
+                    satellite_seed = Some(index);
+                }
+            }
+        }
+
+        let Some(seed) = satellite_seed else {
+            return Ok(false);
+        };
+
+        // Neighbours each touched vertex would have after the move.
+        let mut overrides = Vec::<(u32, [u32; 2])>::with_capacity(touched.len());
+
+        for &index in &touched {
+            let vertex =
+                Vertex::from_number(index as usize + 1).ok_or(AlternatingRepairError::Working {
+                    message: format!("vertex {} is outside the graph", index as usize + 1),
+                })?;
+
+            let mut found = [0u32; 2];
+
+            let mut count = 0usize;
+
+            for &edge_id in graph
+                .incident(vertex)
+                .ok_or(AlternatingRepairError::Working {
+                    message: format!("vertex {} has no incidence", index as usize + 1),
+                })?
+            {
+                let selected = if movement.removed().contains(&edge_id) {
+                    false
+                } else if movement.added().contains(&edge_id) {
+                    true
+                } else {
+                    self.factor.contains(edge_id)
+                };
+
+                if !selected {
+                    continue;
+                }
+
+                if count == 2 {
+                    return Ok(false);
+                }
+
+                found[count] = other_vertex(graph, edge_id, vertex)?.index() as u32;
+
+                count += 1;
+            }
+
+            if count != 2 {
+                return Ok(false);
+            }
+
+            overrides.push((index, found));
+        }
+
+        overrides.sort_unstable_by_key(|&(index, _)| index);
+
+        let low = overrides[0].0;
+        let high = overrides[overrides.len() - 1].0;
+
+        let neighbours_of = |vertex: u32| -> [u32; 2] {
+            if vertex >= low
+                && vertex <= high
+                && let Ok(position) = overrides.binary_search_by_key(&vertex, |&(v, _)| v)
+            {
+                return overrides[position].1;
+            }
+
+            self.neighbours[vertex as usize]
+        };
+
+        let satellite_size = walk_length(seed, |v| self.neighbours[v as usize], usize::MAX);
+
+        let expected = self.giant_size + satellite_size;
+
+        let visited = walk_length(self.giant_representative, neighbours_of, expected);
+
+        Ok(visited == expected)
+    }
+}
+
+/// Length of the cycle through `start`, stopping early past `limit`.
+fn walk_length(start: u32, neighbours: impl Fn(u32) -> [u32; 2], limit: usize) -> usize {
+    let mut visited = 0usize;
+
+    let mut current = start;
+
+    let mut previous = u32::MAX;
+
+    loop {
+        visited += 1;
+
+        if visited > limit {
+            return visited;
+        }
+
+        let [first, second] = neighbours(current);
+
+        let next = if first == previous { second } else { first };
+
+        previous = current;
+        current = next;
+
+        if current == start {
+            return visited;
+        }
+    }
+}
+
+fn required_graph_edge(
+    graph: &PowerGraph,
+    edge_id: EdgeId,
+) -> Result<powercycle_core::Edge, AlternatingRepairError> {
+    graph
+        .edge(edge_id)
+        .ok_or(AlternatingRepairError::InvalidEdgeId { edge_id })
+}
+
+struct RepairSearch<'a, F: FactorView> {
+    graph: &'a PowerGraph,
+    factor: &'a F,
     max_depth: usize,
 }
 
-impl RepairSearch<'_> {
+impl<F: FactorView> RepairSearch<'_, F> {
     fn repair_deficit(
         &self,
         moving_deficit: Vertex,
@@ -521,28 +759,18 @@ impl RepairSearch<'_> {
                 absorbed_vertices,
             );
 
-            let validation = candidate.apply(self.graph, self.factor);
+            let absorbs = self.factor.absorbs(self.graph, &candidate);
 
             added.pop();
 
-            match validation {
-                Ok(_) => {
-                    return Ok(Some(candidate));
-                }
-
-                Err(AlternatingRepairError::InvalidCycleReduction { .. })
-                | Err(AlternatingRepairError::InvalidGiantGrowth { .. }) => {
-                    /*
-                     * The degree repair closes, but its topology
-                     * does not absorb exactly the intended
-                     * satellite. Continue searching.
-                     */
-                }
-
-                Err(error) => {
-                    return Err(error);
-                }
+            if absorbs? {
+                return Ok(Some(candidate));
             }
+
+            /*
+             * The degree repair closes, but its topology does not absorb
+             * exactly the intended satellite. Keep searching.
+             */
         }
 
         if depth >= self.max_depth {
@@ -569,7 +797,7 @@ impl RepairSearch<'_> {
 
             let transfer_vertex = other_vertex(self.graph, added_edge, moving_deficit)?;
 
-            if !self.in_giant[transfer_vertex.index()] {
+            if !self.factor.in_giant(transfer_vertex) {
                 continue;
             }
 
@@ -603,7 +831,7 @@ impl RepairSearch<'_> {
 
                 let next_deficit = other_vertex(self.graph, removed_edge, transfer_vertex)?;
 
-                if !self.in_giant[next_deficit.index()] {
+                if !self.factor.in_giant(next_deficit) {
                     continue;
                 }
 
@@ -754,6 +982,11 @@ fn all_distinct(values: &[EdgeId]) -> bool {
 pub enum AlternatingRepairError {
     Factor(FactorError),
 
+    /// The incremental working form rejected an operation.
+    Working {
+        message: String,
+    },
+
     /// The search was stopped by its caller, not exhausted.
     Interrupted,
 
@@ -824,6 +1057,10 @@ impl fmt::Display for AlternatingRepairError {
 
             Self::Interrupted => {
                 write!(f, "alternating repair search interrupted by its caller")
+            }
+
+            Self::Working { message } => {
+                write!(f, "working factor rejected the operation: {message}")
             }
 
             Self::Decomposition { operation, message } => {
@@ -942,6 +1179,7 @@ impl Error for AlternatingRepairError {
             | Self::MissingGraphEdge { .. }
             | Self::InvalidCycleReduction { .. }
             | Self::InvalidGiantGrowth { .. }
+            | Self::Working { .. }
             | Self::Interrupted => None,
         }
     }
