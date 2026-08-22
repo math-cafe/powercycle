@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 use powercycle_format::{Dump, MoveRecord, Provenance};
 use powercycle_patch::{
-    AlternatingRepairError, find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111,
+    AlternatingRepairError, greedy_alternating_repair, greedy_three_opt_21, greedy_three_opt_111,
 };
 
 const DEFAULT_MAX_DEPTH: usize = 3;
@@ -413,32 +413,46 @@ fn patch_to_local_closure(
          */
         let repair_start = Instant::now();
 
-        eprintln!("pc-patch:   repair: searching depth <= {}", max_depth);
+        eprintln!("pc-patch:   repair: searching depth <= {max_depth}");
 
-        let repair =
-            match find_alternating_repair(graph, &current, max_depth, &|| session.interrupted()) {
-                Ok(found) => found,
+        let before_repair = clone_factor(graph, &current)?;
 
-                Err(AlternatingRepairError::Interrupted) => {
-                    write_checkpoint(session, graph, &current, "repair")?;
+        let repair_outcome =
+            run_greedy_phase(session, graph, &mut current, "repair", &|factor, stop| {
+                match greedy_alternating_repair(graph, factor, max_depth, stop) {
+                    Ok(result) => Ok((result.move_count(), result.into_factor())),
 
-                    eprintln!("pc-patch:   closure: interrupted during alternating repair");
+                    Err(AlternatingRepairError::Interrupted) => {
+                        Err(Box::new(AlternatingRepairError::Interrupted) as Box<dyn Error>)
+                    }
 
-                    return Ok(PatchResult {
-                        interrupted: true,
-                        factor: current,
-                        history,
-                        passes: pass,
-                        one_one_one_moves: total_111_moves,
-                        two_one_moves: total_21_moves,
-                        alternating_repairs,
-                    });
+                    Err(error) => Err(Box::new(error) as Box<dyn Error>),
                 }
+            });
 
-                Err(error) => return Err(Box::new(error)),
-            };
+        let (repair_count, repair_stopped) = match repair_outcome {
+            Ok(outcome) => outcome,
 
-        let Some(repair) = repair else {
+            Err(error) if error.to_string().contains("interrupted by its caller") => {
+                write_checkpoint(session, graph, &current, "repair")?;
+
+                eprintln!("pc-patch:   closure: interrupted during alternating repair");
+
+                return Ok(PatchResult {
+                    interrupted: true,
+                    factor: current,
+                    history,
+                    passes: pass,
+                    one_one_one_moves: total_111_moves,
+                    two_one_moves: total_21_moves,
+                    alternating_repairs,
+                });
+            }
+
+            Err(error) => return Err(error),
+        };
+
+        if repair_count == 0 {
             eprintln!(
                 "pc-patch:   repair: none found, {:.3} s",
                 repair_start.elapsed().as_secs_f64()
@@ -455,35 +469,40 @@ fn patch_to_local_closure(
                 two_one_moves: total_21_moves,
                 alternating_repairs,
             });
-        };
+        }
 
-        let depth = repair.depth();
-        let absorbed = repair.absorbed_vertices();
+        history.push(difference_record(
+            "alternating-repair-batch",
+            &before_repair,
+            &current,
+        ));
 
-        let movement = MoveRecord::new(
-            "alternating-repair",
-            repair.removed().iter().copied(),
-            repair.added().iter().copied(),
-        );
-
-        current = repair.apply(graph, &current)?;
-
-        history.push(movement);
-
-        alternating_repairs += 1;
+        alternating_repairs += repair_count;
 
         let after_repair = CycleDecomposition::new(graph, &current)?;
 
         eprintln!(
-            "pc-patch:   repair: FOUND depth {}, absorbed {}, \
-             {} cycles, giant {}, residual {}, {:.3} s",
-            depth,
-            absorbed,
+            "pc-patch:   repair: {} repairs, {} cycles, giant {}, residual {}, {:.3} s",
+            repair_count,
             after_repair.cycle_count(),
             after_repair.largest_cycle().len(),
             after_repair.residual_vertex_count(),
             repair_start.elapsed().as_secs_f64()
         );
+
+        if repair_stopped {
+            eprintln!("pc-patch:   closure: interrupted during alternating repair");
+
+            return Ok(PatchResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
 
         if after_repair.is_hamiltonian() {
             eprintln!("pc-patch:   closure: Hamiltonian after alternating repair");

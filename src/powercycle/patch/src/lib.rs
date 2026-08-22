@@ -8,7 +8,8 @@ mod three_opt;
 mod three_opt_21;
 
 pub use alternating_repair::{
-    AlternatingRepairError, AlternatingRepairMove, find_alternating_repair,
+    AlternatingRepairError, AlternatingRepairMove, GreedyAlternatingRepairResult,
+    find_alternating_repair, greedy_alternating_repair,
 };
 
 pub use three_opt::{

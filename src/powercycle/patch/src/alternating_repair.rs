@@ -396,6 +396,94 @@ pub fn find_alternating_repair(
     Ok(None)
 }
 
+/// Outcome of repairing until no satellite can be absorbed.
+#[derive(Clone, Debug)]
+pub struct GreedyAlternatingRepairResult {
+    factor: Factor,
+    moves: Vec<AlternatingRepairMove>,
+}
+
+impl GreedyAlternatingRepairResult {
+    /// Consumes the result and returns the patched factor.
+    #[must_use]
+    pub fn into_factor(self) -> Factor {
+        self.factor
+    }
+
+    /// Returns all applied repairs in application order.
+    #[must_use]
+    pub fn moves(&self) -> &[AlternatingRepairMove] {
+        &self.moves
+    }
+
+    /// Returns the number of applied repairs.
+    #[must_use]
+    pub fn move_count(&self) -> usize {
+        self.moves.len()
+    }
+
+    /// Returns the deepest repair applied, or zero when none was.
+    #[must_use]
+    pub fn deepest(&self) -> usize {
+        self.moves
+            .iter()
+            .map(AlternatingRepairMove::depth)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Returns the total number of vertices absorbed into the giant.
+    #[must_use]
+    pub fn absorbed_vertices(&self) -> usize {
+        self.moves
+            .iter()
+            .map(AlternatingRepairMove::absorbed_vertices)
+            .sum()
+    }
+}
+
+/// Absorbs satellites by alternating repair until none can be.
+///
+/// Deliberately sequential: it always takes the first repairable satellite in
+/// canonical order and leaves the rest. Each absorption grows the giant, which
+/// makes the remaining satellites easier, so deferring the hard ones is an
+/// advantage rather than an oversight. Collecting one repair per satellite in
+/// a single scan was measured slower twice, at k = 5 and again at k = 6.
+pub fn greedy_alternating_repair(
+    graph: &PowerGraph,
+    factor: &Factor,
+    max_depth: usize,
+    stop: &dyn Fn() -> bool,
+) -> Result<GreedyAlternatingRepairResult, AlternatingRepairError> {
+    let mut current = Factor::new(graph, factor.selected_edges().to_vec())
+        .map_err(AlternatingRepairError::Factor)?;
+
+    let mut moves = Vec::new();
+
+    while !stop() {
+        let found = match find_alternating_repair(graph, &current, max_depth, stop) {
+            Ok(found) => found,
+
+            Err(AlternatingRepairError::Interrupted) if !moves.is_empty() => break,
+
+            Err(error) => return Err(error),
+        };
+
+        let Some(movement) = found else {
+            break;
+        };
+
+        current = movement.apply(graph, &current)?;
+
+        moves.push(movement);
+    }
+
+    Ok(GreedyAlternatingRepairResult {
+        factor: current,
+        moves,
+    })
+}
+
 struct RepairSearch<'a> {
     graph: &'a PowerGraph,
     factor: &'a Factor,

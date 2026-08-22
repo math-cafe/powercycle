@@ -8,9 +8,7 @@ use std::time::{Duration, Instant};
 use powercycle_config::Config;
 use powercycle_core::{CycleDecomposition, Factor, PowerGraph};
 use powercycle_format::{Dump, MoveRecord, Provenance};
-use powercycle_patch::{
-    AlternatingRepairError, find_alternating_repair, greedy_three_opt_21, greedy_three_opt_111,
-};
+use powercycle_patch::{greedy_alternating_repair, greedy_three_opt_21, greedy_three_opt_111};
 use powercycle_search::preflight::{PreflightReport, hamiltonian_preflight};
 use powercycle_search::{BoundaryCutBudget, Invocation, ProgramInfo, RunContext, SatFactorSolver};
 
@@ -1298,12 +1296,25 @@ fn patch_to_local_closure(
 
         let repair_start = Instant::now();
 
-        let repair = match find_alternating_repair(graph, &current, repair_max_depth, &|| {
-            policy.interrupted()
-        }) {
-            Ok(found) => found,
+        let before_repair = Factor::new(graph, current.selected_edges().to_vec())?;
 
-            Err(AlternatingRepairError::Interrupted) => {
+        let repair_outcome = run_greedy_phase(
+            run,
+            graph,
+            &mut current,
+            "patch-repair",
+            policy,
+            &|factor, stop| match greedy_alternating_repair(graph, factor, repair_max_depth, stop) {
+                Ok(result) => Ok((result.move_count(), result.into_factor())),
+
+                Err(error) => Err(Box::new(error) as Box<dyn Error>),
+            },
+        );
+
+        let (repair_count, repair_stopped) = match repair_outcome {
+            Ok(outcome) => outcome,
+
+            Err(error) if error.to_string().contains("interrupted by its caller") => {
                 write_checkpoint(run, graph, &current, policy.tour, "patch-repair")?;
 
                 report(
@@ -1322,17 +1333,17 @@ fn patch_to_local_closure(
                 });
             }
 
-            Err(error) => return Err(Box::new(error)),
+            Err(error) => return Err(error),
         };
 
-        let repair_search_elapsed = repair_start.elapsed();
+        let repair_elapsed = repair_start.elapsed();
 
-        let Some(repair) = repair else {
+        if repair_count == 0 {
             report(
                 run,
                 format!(
                     "  repair         : none found, {:.3} s",
-                    repair_search_elapsed.as_secs_f64()
+                    repair_elapsed.as_secs_f64()
                 ),
             )?;
 
@@ -1350,42 +1361,46 @@ fn patch_to_local_closure(
                 two_one_moves: total_21_moves,
                 alternating_repairs,
             });
-        };
-
-        let depth = repair.depth();
-        let absorbed = repair.absorbed_vertices();
-        let removed_count = repair.removed().len();
-        let added_count = repair.added().len();
-
-        let before_repair = Factor::new(graph, current.selected_edges().to_vec())?;
-
-        current = repair.apply(graph, &current)?;
+        }
 
         history.push(symmetric_difference_move(
-            format!("alternating-repair-depth-{depth}"),
+            "alternating-repair-batch",
             &before_repair,
             &current,
         ));
 
-        alternating_repairs += 1;
+        alternating_repairs += repair_count;
 
         let after_repair = CycleDecomposition::new(graph, &current)?;
 
         report(
             run,
             format!(
-                "  repair         : FOUND depth {}, absorbed {}, \
-                 toggle {}-{}, {} cycles, giant {}, residual {}, {:.3} s",
-                depth,
-                absorbed,
-                removed_count,
-                added_count,
+                "  repair         : {} repairs, {} cycles, giant {}, residual {}, {:.3} s",
+                repair_count,
                 after_repair.cycle_count(),
                 after_repair.largest_cycle().len(),
                 after_repair.residual_vertex_count(),
-                repair_search_elapsed.as_secs_f64()
+                repair_elapsed.as_secs_f64()
             ),
         )?;
+
+        if repair_stopped {
+            report(
+                run,
+                "  closure        : interrupted during alternating repair",
+            )?;
+
+            return Ok(PatchClosureResult {
+                interrupted: true,
+                factor: current,
+                history,
+                passes: pass,
+                one_one_one_moves: total_111_moves,
+                two_one_moves: total_21_moves,
+                alternating_repairs,
+            });
+        }
 
         if after_repair.is_hamiltonian() {
             report(
