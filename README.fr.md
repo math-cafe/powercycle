@@ -99,7 +99,10 @@ réparation alternée bornée en profondeur.
 
 Voir [`doc/en/algorithms.md`](doc/en/algorithms.md) pour les algorithmes,
 [`doc/en/architecture.md`](doc/en/architecture.md) pour la structure des crates
-et [`doc/en/dump-format.md`](doc/en/dump-format.md) pour le format d'échange.
+[`doc/en/dump-format.md`](doc/en/dump-format.md) pour le format d'échange, et
+[`doc/en/performance.md`](doc/en/performance.md) pour ce qui a été essayé,
+mesuré, gardé et abandonné — y compris les trois optimisations plausibles que
+les mesures ont démenties.
 
 ## Développement
 

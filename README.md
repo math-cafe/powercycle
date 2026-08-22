@@ -96,7 +96,10 @@ depth-bounded alternating repair.
 
 See [`doc/en/algorithms.md`](doc/en/algorithms.md) for the algorithms,
 [`doc/en/architecture.md`](doc/en/architecture.md) for the crate layout and
-[`doc/en/dump-format.md`](doc/en/dump-format.md) for the exchange format.
+[`doc/en/dump-format.md`](doc/en/dump-format.md) for the exchange format, and
+[`doc/en/performance.md`](doc/en/performance.md) for what was tried, measured,
+kept and dropped — including the three plausible optimisations the numbers
+contradicted.
 
 ## Development
 
