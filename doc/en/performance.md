@@ -2,8 +2,9 @@
 
 This document records optimisation attempts on the search and patch pipeline:
 the hypothesis, the measurement, and the verdict — including for the ones that
-failed. Three plausible ideas were abandoned because the numbers contradicted
-them, and without a record someone will re-derive each of them.
+failed. Four plausible ideas were abandoned because the numbers contradicted
+them — one of them implemented twice before the second measurement agreed with
+the first — and without a record someone will re-derive each of them.
 
 Every claim below is a measurement, not an estimate. Where a range is given it
 is the spread of repeated runs.
@@ -101,13 +102,55 @@ stays.
 
 The pass loop applied one repair, then restarted from `1+1+1`, because a repair
 changes the giant and may expose new direct moves. On `G_6` that happened once
-in 57 passes.
+in 57 passes, while every restart cost a fruitless rescan of both direct
+phases.
 
 | `G_6(15748961)`, per absorbed satellite | |
 |---|---|
 | one repair per pass | 52.1 s — of which 9.8 s and 7.4 s of fruitless rescans |
-| repair until exhausted | **30.0 s** |
-| | **1.74×** |
+| repair until exhausted | **27.3 s** |
+
+What the change removes is a fixed cost of about seventeen seconds, not a
+proportion. A four-minute sample taken just after a batched `2+1` phase gave
+1.74×, which was too generous: it compared a fresh state, where the easy
+satellites are still available, against a run already deep into the hard ones.
+Over hours the ratio settles lower and keeps falling, because the repair itself
+grows more expensive as the easy satellites are consumed — 43 s per repair at
+the start of one run, 48 s five windows later. A fixed saving against a growing
+cost is a shrinking ratio.
+
+### 2.5 Deciding repair candidates by traversal
+
+The search validated every closing candidate by calling
+`AlternatingRepairMove::apply`, which rebuilds a `Factor` and sorts its edge
+ids. Instrumenting the k = 5 factor showed **188 such calls for 27 repairs**,
+seven per repair, and on `G_6` each one sorts 15.7 million edge ids. Roughly
+half of a forty-five second repair was spent answering the same question over
+and over — the same defect fixed in 2.1 for `three-opt-21`, but buried inside
+the depth-first search.
+
+A candidate re-links a handful of vertices, so the outcome is decided by
+walking the cycle it would produce: follow the giant, consult a small override
+table for the re-linked vertices, and check that the walk covers the giant and
+the satellite exactly once.
+
+| | |
+|---|---|
+| `G_5(490463)` full patch, before | 15.7 / 13.7 / 12.4 s |
+| `G_5(490463)` full patch, after | **4.7 / 5.4 / 4.9 s** — 2.8× |
+| `G_6` repair, before | 27.3 s per satellite |
+| `G_6` repair, after | **16.4 s** per satellite — 1.67× |
+
+The gain is smaller at `k = 6` because the walk follows the giant: 15.7 million
+vertices per candidate against 490 thousand at `k = 5`. What was free becomes
+visible — but still far below the rebuild it replaces.
+
+A debug assertion compares the traversal against a full apply on every
+candidate, and a debug run of the whole 27-repair k = 5 trajectory passes it on
+all 188.
+
+Cumulatively, 2.4 and 2.5 take the `G_6` repair phase from 52.1 s to 16.4 s per
+absorbed satellite, **3.2×**.
 
 ---
 
@@ -173,7 +216,28 @@ gain on `three-opt-21` is a loss on the alternating repair, because the two
 operators differ in what a *candidate* costs. Collecting candidates is nearly
 free when validity is an O(1) test; it is expensive when each one runs a search.
 
-### 3.3 Encoding witnesses by neighbour index
+### 3.3 An incrementally maintained factor
+
+A `WorkingFactor` was written — selected edges, per-vertex neighbours, cycle
+membership, satellite list, all updated in place, with a full verification at
+each checkpoint to catch drift. The aim was to stop rebuilding a `Factor` for
+every atomic move.
+
+**Written, then dropped without being integrated.** Measuring first showed that
+the seven rebuilds per repair happen *inside the search*, validating candidates,
+not when applying the chosen move. An incremental factor would have removed
+about eight seconds of a forty-five second repair; the traversal test in 2.5
+removed roughly half of it for a fraction of the risk and no new structure.
+
+What such a structure would still buy is visible in the residue: of the sixteen
+seconds a repair now costs on `G_6`, about five are a decomposition and four a
+final apply. That is another factor of two, for considerably more machinery. The
+`FactorView` trait introduced in 2.5 is the seam it would attach to.
+
+The module was deleted rather than left exported and unused: dead public API is
+worse than none, and this document records the design.
+
+### 3.4 Encoding witnesses by neighbour index
 
 A cycle in these graphs carries about `log2(average degree)` bits per vertex,
 around 1.7. zstd on the plain decimal list achieves 22 bits per vertex,
