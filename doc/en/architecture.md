@@ -364,14 +364,25 @@ present rather than overwriting it silently.
 `witness/` is released under CC0; the rest of the repository is dual-licensed
 MIT OR Apache-2.0.
 
-## 10. Performance
+## 10. Mathematical results
+
+[`islands.md`](islands.md) characterises `I_k = { n : delta(G_k(n)) >= 2 }`,
+the set every lower bound comes from, and gives it for `k = 2` to `12` with the
+three independent derivations that agree on it.
+
+[`non-hamiltonicity.md`](non-hamiltonicity.md) covers the other side: the
+`f_2` formulation the pipeline actually descends, the complete certificate for
+`G_2(31)` — the one known case where the degree argument is not enough — and
+which certificate forms scale.
+
+## 11. Performance
 
 Optimisation attempts, their measurements and their verdicts are recorded in
 [`performance.md`](performance.md), failures included. Three plausible ideas
 were dropped because the numbers contradicted them; without that record each
 one invites being re-derived.
 
-## 11. Pre-publication check
+## 12. Pre-publication check
 
 `scripts/check.fish` runs formatting, lints, the test suite, the long
 cross-checks and a release build, then re-derives every claim in `witness/`:
@@ -380,7 +391,7 @@ lower-bound certificate.
 
 It is the single command to run before publishing a result.
 
-## 12. Documentation policy
+## 13. Documentation policy
 
 English documentation is authoritative during active development.
 

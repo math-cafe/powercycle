@@ -98,8 +98,13 @@ See [`doc/en/algorithms.md`](doc/en/algorithms.md) for the algorithms,
 [`doc/en/architecture.md`](doc/en/architecture.md) for the crate layout and
 [`doc/en/dump-format.md`](doc/en/dump-format.md) for the exchange format, and
 [`doc/en/performance.md`](doc/en/performance.md) for what was tried, measured,
-kept and dropped — including the three plausible optimisations the numbers
-contradicted.
+kept and dropped.
+
+The two mathematical results behind the table above have their own documents:
+[`doc/en/islands.md`](doc/en/islands.md) for the admissible set that gives every
+lower bound, and [`doc/en/non-hamiltonicity.md`](doc/en/non-hamiltonicity.md)
+for what a certificate looks like when the degree argument is not enough —
+which so far has happened exactly once, at `k = 2`.
 
 ## Development
 

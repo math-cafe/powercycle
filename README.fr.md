@@ -101,8 +101,14 @@ Voir [`doc/en/algorithms.md`](doc/en/algorithms.md) pour les algorithmes,
 [`doc/en/architecture.md`](doc/en/architecture.md) pour la structure des crates
 [`doc/en/dump-format.md`](doc/en/dump-format.md) pour le format d'échange, et
 [`doc/en/performance.md`](doc/en/performance.md) pour ce qui a été essayé,
-mesuré, gardé et abandonné — y compris les trois optimisations plausibles que
-les mesures ont démenties.
+mesuré, gardé et abandonné.
+
+Les deux résultats mathématiques derrière le tableau ci-dessus ont leur propre
+document : [`doc/en/islands.md`](doc/en/islands.md) pour l'ensemble admissible
+d'où viennent toutes les bornes inférieures, et
+[`doc/en/non-hamiltonicity.md`](doc/en/non-hamiltonicity.md) pour ce à quoi
+ressemble un certificat quand l'argument de degré ne suffit pas — ce qui n'est
+arrivé qu'une fois, à `k = 2`.
 
 ## Développement
 
