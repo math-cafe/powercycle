@@ -16,7 +16,7 @@
 #
 #   pc-scan <k> 1 <n>
 
-set -l project_root (realpath (status dirname))
+set -l project_root (realpath (status dirname)/..)
 
 if test (count $argv) -lt 4 -o (count $argv) -gt 5
     echo "usage: scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]" >&2
