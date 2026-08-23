@@ -80,10 +80,8 @@ powercycle/
 │       └── python/
 │
 ├── doc/
-│   ├── en/
-│   └── fr/
+│   └── en/
 │
-├── bin/
 ├── data/
 │   ├── runs/
 │   ├── dumps/
@@ -95,8 +93,8 @@ powercycle/
 
 All source files live under `src/`.
 
-`bin/`, `data/`, Cargo build directories and `powercycle.local.toml` contain
-local state and are not versioned.
+`data/`, Cargo build directories and `powercycle.local.toml` contain local
+state and are not versioned.
 
 `witness/` is versioned and reserved for selected reproducible results.
 

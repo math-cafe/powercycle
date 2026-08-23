@@ -1,10 +1,6 @@
 # Cargo
 target/
 
-# Generated executables
-/bin/*
-!/bin/.gitkeep
-
 # Working data
 /data/runs/*
 !/data/runs/.gitkeep
