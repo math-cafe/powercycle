@@ -84,6 +84,9 @@ behaves exactly as before.
 `pc-scan` reporting `CANDIDATE` means no implemented obstruction was found. It
 does not prove that a Hamiltonian cycle exists.
 
+[`doc/en/runbook.md`](doc/en/runbook.md) is the full checklist, from locating
+the first candidate to a verified witness bundle.
+
 ## Approach
 
 A Hamiltonian cycle is relaxed to a **2-factor**: one SAT variable per graph

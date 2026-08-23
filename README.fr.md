@@ -86,6 +86,9 @@ construire. Un scan sans garde se comporte exactement comme avant.
 Un verdict `CANDIDATE` de `pc-scan` signifie qu'aucune obstruction implémentée
 n'a été trouvée. Il ne prouve pas qu'un cycle hamiltonien existe.
 
+[`doc/en/runbook.md`](doc/en/runbook.md) déroule la marche à suivre complète,
+du repérage du premier candidat jusqu'au lot de témoin vérifié.
+
 ## Approche
 
 Le cycle hamiltonien est relâché en **2-facteur** : une variable SAT par arête du
