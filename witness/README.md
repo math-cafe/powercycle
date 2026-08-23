@@ -17,7 +17,7 @@ cycle.
 | 3 | **473** | `9^3 - 8^3/2` | [`k3-n473/`](k3-n473/) |
 | 4 | **9641** | `11^4 - 10^4/2` | [`k4-n9641/`](k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | [`k5-n246877/`](k5-n246877/) |
-| 6 | `>= 15748961` | `17^6 - 16^6/2` | no witness yet |
+| 6 | **15748961** | `17^6 - 16^6/2` | [`k6-n15748961/`](k6-n15748961/) |
 | 7 | `>= 587761723` | `19^7 - 18^7/2` | no witness yet |
 
 [`k5-n490463/`](k5-n490463/) holds an earlier, non-minimal witness for `k = 5`.
@@ -68,9 +68,9 @@ This condition is **necessary, not sufficient**. `k = 2` is the counterexample t
 keep in mind: the analogous bound is `31`, and `G_2(31)` passes every necessary
 condition implemented in `pc-scan`, yet the true minimum is `32`.
 
-For `k = 3, 4, 5` the two halves meet, because a witness exists at the very first
-`n` the bound allows. That is what makes those values theorems rather than
-bounds. For `k >= 6` only the lower bound is established.
+For `k = 3, 4, 5, 6` the two halves meet, because a witness exists at the very
+first `n` the bound allows. That is what makes those values theorems rather than
+bounds. For `k >= 7` only the lower bound is established.
 
 See [`k5-n246877/README.md`](k5-n246877/README.md) for the full discussion.
 

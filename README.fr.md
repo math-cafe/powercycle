@@ -20,7 +20,7 @@ c'est le square-sum problem classique.
 | 3 | **473** | `9^3 - 8^3/2` | [`witness/k3-n473/`](witness/k3-n473/) |
 | 4 | **9641** | `11^4 - 10^4/2` | [`witness/k4-n9641/`](witness/k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | [`witness/k5-n246877/`](witness/k5-n246877/) |
-| 6 | `>= 15748961` | `17^6 - 16^6/2` | ouvert |
+| 6 | **15748961** | `17^6 - 16^6/2` | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
 | 7 | `>= 587761723` | `19^7 - 18^7/2` | ouvert |
 
 Chaque valeur en gras est un théorème, pas une borne : le bundle porte un cycle

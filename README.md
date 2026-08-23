@@ -19,7 +19,7 @@ perfect `k`-th power**. For `k = 2` this is the classical square-sum problem.
 | 3 | **473** | `9^3 - 8^3/2` | [`witness/k3-n473/`](witness/k3-n473/) |
 | 4 | **9641** | `11^4 - 10^4/2` | [`witness/k4-n9641/`](witness/k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | [`witness/k5-n246877/`](witness/k5-n246877/) |
-| 6 | `>= 15748961` | `17^6 - 16^6/2` | open |
+| 6 | **15748961** | `17^6 - 16^6/2` | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
 | 7 | `>= 587761723` | `19^7 - 18^7/2` | open |
 
 Each value in bold is a theorem, not a bound: the bundle carries a Hamiltonian

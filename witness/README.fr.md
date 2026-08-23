@@ -17,7 +17,7 @@ pour lequel `G_k(n)` possède un cycle hamiltonien.
 | 3 | **473** | `9^3 - 8^3/2` | [`k3-n473/`](k3-n473/) |
 | 4 | **9641** | `11^4 - 10^4/2` | [`k4-n9641/`](k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | [`k5-n246877/`](k5-n246877/) |
-| 6 | `>= 15748961` | `17^6 - 16^6/2` | pas encore de témoin |
+| 6 | **15748961** | `17^6 - 16^6/2` | [`k6-n15748961/`](k6-n15748961/) |
 | 7 | `>= 587761723` | `19^7 - 18^7/2` | pas encore de témoin |
 
 [`k5-n490463/`](k5-n490463/) conserve un témoin antérieur, non minimal, pour
@@ -72,9 +72,10 @@ Cette condition est **nécessaire, pas suffisante**. `k = 2` est le contre-exemp
 conditions nécessaires implémentées dans `pc-scan`, alors que le minimum réel est
 `32`.
 
-Pour `k = 3, 4, 5`, les deux moitiés se rejoignent, car un témoin existe au tout
-premier `n` que la borne autorise. C'est ce qui fait de ces valeurs des théorèmes
-et non de simples bornes. Pour `k >= 6`, seule la borne inférieure est établie.
+Pour `k = 3, 4, 5, 6`, les deux moitiés se rejoignent, car un témoin existe au
+tout premier `n` que la borne autorise. C'est ce qui fait de ces valeurs des
+théorèmes et non de simples bornes. Pour `k >= 7`, seule la borne inférieure est
+établie.
 
 Voir [`k5-n246877/README.fr.md`](k5-n246877/README.fr.md) pour la discussion
 complète.
