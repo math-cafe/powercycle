@@ -3,7 +3,7 @@
 # Build a curated versioned witness bundle.
 #
 # Usage:
-#   ./prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]
+#   scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]
 #
 # The bundle is written to witness/k<k>-n<n>/. Each artifact is stored
 # compressed, next to the SHA-256 of its uncompressed form.
@@ -19,7 +19,7 @@
 set -l project_root (realpath (status dirname))
 
 if test (count $argv) -lt 4 -o (count $argv) -gt 5
-    echo "usage: prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]" >&2
+    echo "usage: scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]" >&2
     exit 2
 end
 

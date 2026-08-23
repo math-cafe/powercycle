@@ -356,8 +356,8 @@ the `pc-scan` output over `1 .. n`, which records the obstruction found at every
 smaller value. Existence and minimality are then both reproducible from the
 bundle alone.
 
-Bundles are built by `prepare-witness.fish`, which verifies any checksum already
-present rather than overwriting it silently.
+Bundles are built by `scripts/prepare-witness.fish`, which verifies any
+checksum already present rather than overwriting it silently.
 
 `witness/` is released under CC0; the rest of the repository is dual-licensed
 MIT OR Apache-2.0.
