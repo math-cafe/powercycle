@@ -9,7 +9,7 @@ Le graphe a pour sommets `1, 2, ..., 15748961`. Deux sommets distincts `a` et
 `b` sont adjacents exactement lorsque `a + b` est une puissance sixième
 parfaite.
 
-`cycle.txt.zst` se décompresse en un fichier texte simple, un sommet par ligne.
+`cycle.txt.xz` se décompresse en un fichier texte simple, un sommet par ligne.
 Chaque entier de `1` à `15748961` apparaît exactement une fois, et chaque paire
 de sommets consécutifs, y compris la paire de fermeture entre la dernière et la
 première ligne, somme à une puissance sixième parfaite.
@@ -69,7 +69,7 @@ aucun graphe et prend 25 secondes.
 
 ## Provenance
 
-Le dump final `final.pcdump.json.zst` a pour identifiant sémantique
+Le dump final `final.pcdump.json.xz` a pour identifiant sémantique
 `34a7b80245ee…`.
 
 La chaîne qui a produit ce témoin, avec ses durées :
@@ -109,7 +109,7 @@ cycle texte lui-même.
 ## Vérification indépendante
 
 ```console
-zstd -dc witness/k6-n15748961/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k6-n15748961/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \
@@ -121,7 +121,7 @@ python src/verify/python/verify-cycle.py 6 15748961 /tmp/powercycle-cycle.txt
 La borne inférieure se rejoue avec :
 
 ```console
-zstd -dc witness/k6-n15748961/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k6-n15748961/scan.txt.xz > /tmp/powercycle-scan.txt
 cargo run --release --bin pc-scan -- 6 1 15748961 | diff - /tmp/powercycle-scan.txt
 ```
 
@@ -130,17 +130,17 @@ n'utilisent que `k`, `n` et le témoin candidat.
 
 ## Fichiers
 
-- `cycle.txt.zst` — témoin de cycle hamiltonien canonique, compressé (54 Mo).
+- `cycle.txt.xz` — témoin de cycle hamiltonien canonique, compressé (24 Mo).
 - `cycle.txt.sha256` — SHA-256 du `cycle.txt` non compressé.
-- `scan.txt.zst` — certificat de borne inférieure `pc-scan`, compressé (6,5 Mo).
+- `scan.txt.xz` — certificat de borne inférieure `pc-scan`, compressé (4,5 Mo).
 - `scan.txt.sha256` — SHA-256 du `scan.txt` non compressé.
-- `final.pcdump.json.zst` — dump final compressé, avec provenance (13 Mo).
+- `final.pcdump.json.xz` — dump final compressé, avec provenance (11 Mo).
 - `final.pcdump.json.sha256` — SHA-256 du dump final non compressé.
 - `README.md` — version anglaise, faisant foi.
 - `README.fr.md` — ce document.
 
-Un cycle hamiltonien est quasi incompressible — environ 28 bits par sommet ici,
-contre une borne informationnelle proche de 1,7 — si bien que `cycle.txt.zst`
+Un cycle hamiltonien est quasi incompressible — environ 12 bits par sommet ici,
+contre une borne informationnelle proche de 1,7 — si bien que `cycle.txt.xz`
 domine ce bundle. Un encodage par indice de voisin serait bien plus petit mais
 exigerait le graphe, 922 Mo à cette taille, pour décoder. La liste brute se
 vérifie avec vingt lignes et aucune structure de données, ce qui vaut mieux que

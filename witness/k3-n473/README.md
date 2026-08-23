@@ -8,7 +8,7 @@ power-sum graph `G_3(473)`.
 The graph has vertex set `1, 2, ..., 473`. Two distinct vertices `a` and `b` are
 adjacent exactly when `a + b` is a perfect power with exponent 3.
 
-`cycle.txt.zst` decompresses to a plain-text file with one vertex per line. Every
+`cycle.txt.xz` decompresses to a plain-text file with one vertex per line. Every
 integer from `1` through `473` appears exactly once, and every consecutive pair,
 including the closing pair from the last line back to the first, sums to a
 perfect power with exponent 3.
@@ -64,7 +64,7 @@ the `CANDIDATE` verdict at `473`.
 
 ## Provenance
 
-The final dump `final.pcdump.json.zst` has semantic dump ID `bdb9fcc35ded…`.
+The final dump `final.pcdump.json.xz` has semantic dump ID `bdb9fcc35ded…`.
 
 - SAT tour 1 produced a raw 2-factor with 7 cycles, giant size 204 and residual 269.
 - Two greedy `three-opt-111` moves brought it to 3 cycles with giant size 441.
@@ -78,7 +78,7 @@ plain cycle witness itself.
 ## Independent verification
 
 ```console
-zstd -dc witness/k3-n473/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k3-n473/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \
@@ -90,7 +90,7 @@ python src/verify/python/verify-cycle.py 3 473 /tmp/powercycle-cycle.txt
 The lower bound is re-derived with:
 
 ```console
-zstd -dc witness/k3-n473/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k3-n473/scan.txt.xz > /tmp/powercycle-scan.txt
 cargo run --release --bin pc-scan -- 3 1 473 | diff - /tmp/powercycle-scan.txt
 ```
 

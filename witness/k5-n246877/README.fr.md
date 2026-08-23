@@ -8,7 +8,7 @@ pour le graphe de sommes de puissances `G_5(246877)`.
 Le graphe a pour sommets `1, 2, ..., 246877`. Deux sommets distincts `a` et `b`
 sont adjacents exactement lorsque `a + b` est une puissance cinquième parfaite.
 
-Le fichier `cycle.txt.zst` contient un cycle hamiltonien : après décompression,
+Le fichier `cycle.txt.xz` contient un cycle hamiltonien : après décompression,
 c'est un fichier texte simple comportant un sommet par ligne. Chaque entier de
 `1` à `246877` apparaît exactement une fois et la somme de chaque paire de
 sommets consécutifs, y compris la paire de fermeture entre la dernière et la
@@ -99,7 +99,7 @@ reproduction ne construit aucun graphe.
 ## Provenance
 
 Le dump final versionné de powercycle est conservé sous la forme
-`final.pcdump.json.zst`. Son identifiant sémantique est :
+`final.pcdump.json.xz`. Son identifiant sémantique est :
 
 `110da2ad0fd9…`
 
@@ -135,7 +135,7 @@ du graphe, ni l'historique de patch, ni l'implémentation de la recherche.
 Les vérifications habituelles, depuis la racine du dépôt, sont :
 
 ```console
-zstd -dc witness/k5-n246877/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k5-n246877/cycle.txt.xz > /tmp/powercycle-cycle.txt
 
 sha256sum /tmp/powercycle-cycle.txt
 
@@ -150,7 +150,7 @@ python src/verify/python/verify-cycle.py \
 La borne inférieure se rejoue avec :
 
 ```console
-zstd -dc witness/k5-n246877/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k5-n246877/scan.txt.xz > /tmp/powercycle-scan.txt
 
 sha256sum /tmp/powercycle-scan.txt
 
@@ -162,11 +162,11 @@ donnés ci-dessus.
 
 ## Fichiers
 
-- `cycle.txt.zst` — témoin de cycle hamiltonien canonique, compressé.
+- `cycle.txt.xz` — témoin de cycle hamiltonien canonique, compressé.
 - `cycle.txt.sha256` — SHA-256 du `cycle.txt` non compressé.
-- `scan.txt.zst` — certificat de borne inférieure `pc-scan`, compressé.
+- `scan.txt.xz` — certificat de borne inférieure `pc-scan`, compressé.
 - `scan.txt.sha256` — SHA-256 du `scan.txt` non compressé.
-- `final.pcdump.json.zst` — dump powercycle final compressé, avec provenance.
+- `final.pcdump.json.xz` — dump powercycle final compressé, avec provenance.
 - `final.pcdump.json.sha256` — SHA-256 du dump final non compressé.
 - `README.md` — version anglaise, faisant foi.
 - `README.fr.md` — ce document.

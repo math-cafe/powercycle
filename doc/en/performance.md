@@ -273,10 +273,10 @@ worse than none, and this document records the design.
 ### 3.4 Encoding witnesses by neighbour index
 
 A cycle in these graphs carries about `log2(average degree)` bits per vertex,
-around 1.7. zstd on the plain decimal list achieves 22 bits per vertex,
-measured across the four published witnesses — thirteen times the floor. An
+around 1.7. xz on the plain decimal list achieves 10.7 bits per vertex,
+measured across the five published witnesses — six times the floor. An
 encoding that stores which incident edge was taken would close most of that
-gap: the `k = 7` witness would drop from 1.6 GB to about 126 MB.
+gap: the `k = 7` witness would drop from 920 MB to about 126 MB.
 
 **Not done, deliberately.** Decoding such a witness requires rebuilding the
 graph, which at `k = 7` is 33 GB. The plain list verifies with twenty lines of

@@ -42,7 +42,7 @@ function record_failure --argument-names label
     set_color normal
 end
 
-for tool in cargo zstd sha256sum python3
+for tool in cargo xz sha256sum python3
     if not type -q $tool
         echo "check: $tool is required" >&2
         exit 1
@@ -103,11 +103,11 @@ for bundle in $project_root/witness/k*-n*/
     set -l artifact_failed 0
 
     for artifact in cycle.txt scan.txt final.pcdump.json
-        if not test -f "$bundle/$artifact.zst"
+        if not test -f "$bundle/$artifact.xz"
             continue
         end
 
-        zstd -dcq "$bundle/$artifact.zst" >"$work/$artifact"
+        xz -dc "$bundle/$artifact.xz" >"$work/$artifact"
 
         set -l actual (sha256sum "$work/$artifact" | string split " " | head -n 1)
         set -l expected (cat "$bundle/$artifact.sha256" | string split " " | head -n 1)
@@ -138,7 +138,7 @@ for bundle in $project_root/witness/k*-n*/
     end
 
     # A bundle claiming minimality must reproduce its lower-bound certificate.
-    if test -f "$bundle/scan.txt.zst"
+    if test -f "$bundle/scan.txt.xz"
         if ./target/release/pc-scan $k 1 $n 2>/dev/null | diff -q - "$work/scan.txt" >/dev/null
             echo "    lower bound: scan replayed identically"
         else
@@ -185,7 +185,7 @@ else
         end
 
         # It must land under witness/, not beside whatever invoked it.
-        if test -f "$probe_bundle/cycle.txt.zst"
+        if test -f "$probe_bundle/cycle.txt.xz"
             echo "    landed in witness/k$probe_k-n$probe_n"
         else
             record_failure "bundle construction: not written to witness/"
@@ -202,8 +202,8 @@ else
 
         # A bundle the script accepts must still be a valid witness: an empty
         # cycle.txt has a perfectly good checksum.
-        if test -f "$probe_bundle/cycle.txt.zst"
-            zstd -dcq "$probe_bundle/cycle.txt.zst" >"$work/probe-back.txt"
+        if test -f "$probe_bundle/cycle.txt.xz"
+            xz -dc "$probe_bundle/cycle.txt.xz" >"$work/probe-back.txt"
 
             set -l lines (wc -l <"$work/probe-back.txt" | string trim)
 

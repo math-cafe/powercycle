@@ -79,7 +79,7 @@ See [`k5-n246877/README.md`](k5-n246877/README.md) for the full discussion.
 From the repository root, with `K` and `N` set to the bundle's parameters:
 
 ```console
-zstd -dc witness/k$K-n$N/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k$K-n$N/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt          # must match cycle.txt.sha256
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \

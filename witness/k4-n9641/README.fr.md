@@ -8,7 +8,7 @@ pour le graphe de sommes de puissances `G_4(9641)`.
 Le graphe a pour sommets `1, 2, ..., 9641`. Deux sommets distincts `a` et `b` sont
 adjacents exactement lorsque `a + b` est une puissance parfaite d'exposant 4.
 
-`cycle.txt.zst` se décompresse en un fichier texte simple, un sommet par ligne.
+`cycle.txt.xz` se décompresse en un fichier texte simple, un sommet par ligne.
 Chaque entier de `1` à `9641` apparaît exactement une fois, et chaque paire de
 sommets consécutifs, y compris la paire de fermeture entre la dernière et la
 première ligne, somme à une puissance parfaite d'exposant 4.
@@ -65,7 +65,7 @@ dernière porte le verdict `CANDIDATE` à `9641`.
 
 ## Provenance
 
-Le dump final `final.pcdump.json.zst` a pour identifiant sémantique `940ef6637add…`.
+Le dump final `final.pcdump.json.xz` a pour identifiant sémantique `940ef6637add…`.
 
 - le tour SAT 1 produit un 2-facteur brut de 6 cycles, avec un géant de taille 5023 et un résiduel de 4618 sommets ;
 - un mouvement glouton `three-opt-21` porte le géant à 9157 ;
@@ -79,7 +79,7 @@ cycle texte lui-même.
 ## Vérification indépendante
 
 ```console
-zstd -dc witness/k4-n9641/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k4-n9641/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \
@@ -91,7 +91,7 @@ python src/verify/python/verify-cycle.py 4 9641 /tmp/powercycle-cycle.txt
 La borne inférieure se rejoue avec :
 
 ```console
-zstd -dc witness/k4-n9641/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k4-n9641/scan.txt.xz > /tmp/powercycle-scan.txt
 cargo run --release --bin pc-scan -- 4 1 9641 | diff - /tmp/powercycle-scan.txt
 ```
 

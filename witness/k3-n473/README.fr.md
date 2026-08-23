@@ -8,7 +8,7 @@ pour le graphe de sommes de puissances `G_3(473)`.
 Le graphe a pour sommets `1, 2, ..., 473`. Deux sommets distincts `a` et `b` sont
 adjacents exactement lorsque `a + b` est une puissance parfaite d'exposant 3.
 
-`cycle.txt.zst` se décompresse en un fichier texte simple, un sommet par ligne.
+`cycle.txt.xz` se décompresse en un fichier texte simple, un sommet par ligne.
 Chaque entier de `1` à `473` apparaît exactement une fois, et chaque paire de
 sommets consécutifs, y compris la paire de fermeture entre la dernière et la
 première ligne, somme à une puissance parfaite d'exposant 3.
@@ -65,7 +65,7 @@ dernière porte le verdict `CANDIDATE` à `473`.
 
 ## Provenance
 
-Le dump final `final.pcdump.json.zst` a pour identifiant sémantique `bdb9fcc35ded…`.
+Le dump final `final.pcdump.json.xz` a pour identifiant sémantique `bdb9fcc35ded…`.
 
 - le tour SAT 1 produit un 2-facteur brut de 7 cycles, avec un géant de taille 204 et un résiduel de 269 sommets ;
 - deux mouvements gloutons `three-opt-111` le ramènent à 3 cycles, avec un géant de taille 441 ;
@@ -79,7 +79,7 @@ cycle texte lui-même.
 ## Vérification indépendante
 
 ```console
-zstd -dc witness/k3-n473/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k3-n473/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \
@@ -91,7 +91,7 @@ python src/verify/python/verify-cycle.py 3 473 /tmp/powercycle-cycle.txt
 La borne inférieure se rejoue avec :
 
 ```console
-zstd -dc witness/k3-n473/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k3-n473/scan.txt.xz > /tmp/powercycle-scan.txt
 cargo run --release --bin pc-scan -- 3 1 473 | diff - /tmp/powercycle-scan.txt
 ```
 

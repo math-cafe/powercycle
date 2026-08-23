@@ -8,7 +8,7 @@ power-sum graph `G_6(15748961)`.
 The graph has vertex set `1, 2, ..., 15748961`. Two distinct vertices `a` and
 `b` are adjacent exactly when `a + b` is a perfect sixth power.
 
-`cycle.txt.zst` decompresses to a plain-text file with one vertex per line.
+`cycle.txt.xz` decompresses to a plain-text file with one vertex per line.
 Every integer from `1` through `15748961` appears exactly once, and every
 consecutive pair, including the closing pair from the last line back to the
 first, sums to a perfect sixth power.
@@ -66,7 +66,7 @@ and takes 25 seconds.
 
 ## Provenance
 
-The final dump `final.pcdump.json.zst` has semantic dump ID `34a7b80245ee…`.
+The final dump `final.pcdump.json.xz` has semantic dump ID `34a7b80245ee…`.
 
 The chain that produced this witness, with its timings:
 
@@ -103,7 +103,7 @@ plain cycle witness itself.
 ## Independent verification
 
 ```console
-zstd -dc witness/k6-n15748961/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k6-n15748961/cycle.txt.xz > /tmp/powercycle-cycle.txt
 sha256sum /tmp/powercycle-cycle.txt
 
 cargo run --release --manifest-path src/verify/rust/Cargo.toml \
@@ -115,7 +115,7 @@ python src/verify/python/verify-cycle.py 6 15748961 /tmp/powercycle-cycle.txt
 The lower bound is re-derived with:
 
 ```console
-zstd -dc witness/k6-n15748961/scan.txt.zst > /tmp/powercycle-scan.txt
+xz -dc witness/k6-n15748961/scan.txt.xz > /tmp/powercycle-scan.txt
 cargo run --release --bin pc-scan -- 6 1 15748961 | diff - /tmp/powercycle-scan.txt
 ```
 
@@ -124,17 +124,17 @@ Both verifiers are independent of the powercycle libraries: they use only `k`,
 
 ## Files
 
-- `cycle.txt.zst` — compressed canonical Hamiltonian-cycle witness (54 MB).
+- `cycle.txt.xz` — compressed canonical Hamiltonian-cycle witness (24 MB).
 - `cycle.txt.sha256` — SHA-256 of the uncompressed `cycle.txt`.
-- `scan.txt.zst` — compressed `pc-scan` lower-bound certificate (6.5 MB).
+- `scan.txt.xz` — compressed `pc-scan` lower-bound certificate (4.5 MB).
 - `scan.txt.sha256` — SHA-256 of the uncompressed `scan.txt`.
-- `final.pcdump.json.zst` — compressed final dump with provenance (13 MB).
+- `final.pcdump.json.xz` — compressed final dump with provenance (11 MB).
 - `final.pcdump.json.sha256` — SHA-256 of the uncompressed final dump.
 - `README.md` — this document.
 - `README.fr.md` — French version.
 
-A Hamiltonian cycle is close to incompressible — about 28 bits per vertex here
-against an information-theoretic floor near 1.7 — so `cycle.txt.zst` dominates
+A Hamiltonian cycle is close to incompressible — about 12 bits per vertex here
+against an information-theoretic floor near 1.7 — so `cycle.txt.xz` dominates
 this bundle. An encoding by neighbour index would be far smaller but would need
 the graph, 922 MB at this size, to decode. The plain list verifies with twenty
 lines and no data structure, which is worth more than the space.

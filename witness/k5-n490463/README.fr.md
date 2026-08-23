@@ -8,7 +8,7 @@ de sommes de puissances `G_5(490463)`.
 Le graphe a pour sommets `1, 2, ..., 490463`. Deux sommets distincts `a` et `b`
 sont adjacents exactement lorsque `a + b` est une puissance cinquième parfaite.
 
-Le fichier `cycle.txt.zst` contient un cycle hamiltonien : après décompression,
+Le fichier `cycle.txt.xz` contient un cycle hamiltonien : après décompression,
 c'est un fichier texte simple comportant un sommet par ligne. Chaque entier de
 `1` à `490463` apparaît exactement une fois et la somme de chaque paire de
 sommets consécutifs, y compris la paire de fermeture entre la dernière et la
@@ -37,7 +37,7 @@ deux voisins de `1` est placé en deuxième position.
 ## Provenance
 
 Le dump final versionné de powercycle est conservé sous la forme
-`final.pcdump.json.zst`. Son identifiant sémantique est :
+`final.pcdump.json.xz`. Son identifiant sémantique est :
 
 `fa62a76a36f8…`
 
@@ -71,7 +71,7 @@ recherche.
 Vérifications typiques depuis la racine du dépôt :
 
 ```console
-zstd -dc witness/k5-n490463/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k5-n490463/cycle.txt.xz > /tmp/powercycle-cycle.txt
 
 sha256sum /tmp/powercycle-cycle.txt
 
@@ -88,9 +88,9 @@ doivent être identiques à l'identité canonique indiquée ci-dessus.
 
 ## Fichiers
 
-- `cycle.txt.zst` — témoin hamiltonien canonique compressé ;
+- `cycle.txt.xz` — témoin hamiltonien canonique compressé ;
 - `cycle.txt.sha256` — SHA-256 du `cycle.txt` non compressé ;
-- `final.pcdump.json.zst` — dump final powercycle compressé avec provenance ;
+- `final.pcdump.json.xz` — dump final powercycle compressé avec provenance ;
 - `final.pcdump.json.sha256` — SHA-256 du dump final non compressé ;
 - `README.md` — version anglaise ;
 - `README.fr.md` — ce document.

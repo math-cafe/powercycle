@@ -32,7 +32,7 @@ particular why `k = 2` does not follow the same pattern.
 Nothing here asks you to trust the search. From a fresh clone:
 
 ```console
-zstd -dc witness/k5-n246877/cycle.txt.zst > /tmp/cycle.txt
+xz -dc witness/k5-n246877/cycle.txt.xz > /tmp/cycle.txt
 
 sha256sum /tmp/cycle.txt
 cat witness/k5-n246877/cycle.txt.sha256
@@ -53,7 +53,7 @@ history or anything produced by the solver.
 To re-derive the lower bound instead:
 
 ```console
-zstd -dc witness/k5-n246877/scan.txt.zst > /tmp/scan.txt
+xz -dc witness/k5-n246877/scan.txt.xz > /tmp/scan.txt
 cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/scan.txt
 ```
 

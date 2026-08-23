@@ -33,7 +33,7 @@ en particulier pourquoi `k = 2` ne suit pas le même motif.
 Rien ici ne demande de faire confiance à la recherche. Depuis un clone neuf :
 
 ```console
-zstd -dc witness/k5-n246877/cycle.txt.zst > /tmp/cycle.txt
+xz -dc witness/k5-n246877/cycle.txt.xz > /tmp/cycle.txt
 
 sha256sum /tmp/cycle.txt
 cat witness/k5-n246877/cycle.txt.sha256
@@ -55,7 +55,7 @@ produit par le solveur.
 Pour rejouer la borne inférieure :
 
 ```console
-zstd -dc witness/k5-n246877/scan.txt.zst > /tmp/scan.txt
+xz -dc witness/k5-n246877/scan.txt.xz > /tmp/scan.txt
 cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/scan.txt
 ```
 

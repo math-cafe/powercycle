@@ -8,7 +8,7 @@ This directory contains a curated Hamiltonian-cycle witness for the power-sum gr
 The graph has vertex set `1, 2, ..., 490463`. Two distinct vertices `a` and `b`
 are adjacent exactly when `a + b` is a perfect fifth power.
 
-The file `cycle.txt.zst` contains a Hamiltonian cycle: after decompression it is a
+The file `cycle.txt.xz` contains a Hamiltonian cycle: after decompression it is a
 plain-text file with one vertex per line. Every integer from `1` through `490463`
 appears exactly once, and every consecutive pair, including the closing pair from
 the last line back to the first, has a sum equal to a perfect fifth power.
@@ -36,7 +36,7 @@ second.
 ## Provenance
 
 The final versioned powercycle dump is stored as
-`final.pcdump.json.zst`. Its semantic dump ID is:
+`final.pcdump.json.xz`. Its semantic dump ID is:
 
 `fa62a76a36f8…`
 
@@ -67,7 +67,7 @@ solver, dump format, graph edge IDs, patch history or search implementation.
 Typical checks from the repository root are:
 
 ```console
-zstd -dc witness/k5-n490463/cycle.txt.zst > /tmp/powercycle-cycle.txt
+xz -dc witness/k5-n490463/cycle.txt.xz > /tmp/powercycle-cycle.txt
 
 sha256sum /tmp/powercycle-cycle.txt
 
@@ -84,9 +84,9 @@ the canonical witness identity given above.
 
 ## Files
 
-- `cycle.txt.zst` — compressed canonical Hamiltonian-cycle witness.
+- `cycle.txt.xz` — compressed canonical Hamiltonian-cycle witness.
 - `cycle.txt.sha256` — SHA-256 of the uncompressed `cycle.txt`.
-- `final.pcdump.json.zst` — compressed final powercycle dump with provenance.
+- `final.pcdump.json.xz` — compressed final powercycle dump with provenance.
 - `final.pcdump.json.sha256` — SHA-256 of the uncompressed final dump.
 - `README.md` — this document.
 - `README.fr.md` — French version.

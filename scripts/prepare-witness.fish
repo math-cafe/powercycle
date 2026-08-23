@@ -6,7 +6,9 @@
 #   scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]
 #
 # The bundle is written to witness/k<k>-n<n>/. Each artifact is stored
-# compressed, next to the SHA-256 of its uncompressed form.
+# xz-compressed, next to the SHA-256 of its uncompressed form. The checksum
+# covers the content, not the container, so it survives a change of
+# compressor.
 #
 # When a checksum file already exists, the freshly computed SHA-256 must match
 # it. Re-running the script on an existing bundle is therefore a verification
@@ -46,8 +48,8 @@ end
 
 set -l witness_dir "$project_root/witness/k$k-n$n"
 
-if not type -q zstd
-    echo "prepare-witness: zstd is required" >&2
+if not type -q xz
+    echo "prepare-witness: xz is required" >&2
     exit 1
 end
 
@@ -84,14 +86,11 @@ function store_artifact --argument-names source name
 
     echo "$actual  $name" >"$checksum_path"
 
-    zstd \
-        --force \
-        --quiet \
-        --threads=0 \
-        --ultra \
-        -19 \
-        "$source" \
-        -o "$witness_dir/$name.zst"
+    # -T1 rather than -T0: single-threaded output does not depend on the
+    # core count, so the committed bytes are the same on every machine. It
+    # costs nothing here, xz finding no parallelism at this dictionary size.
+    xz --compress --force --quiet -9e -T1 --stdout \
+        "$source" >"$witness_dir/$name.xz"
 
     echo "  $name : $actual"
 end
@@ -111,7 +110,7 @@ end
 
 echo
 echo "Verify the witness with:"
-echo "  zstd -dc $witness_dir/cycle.txt.zst > /tmp/powercycle-cycle.txt"
+echo "  xz -dc $witness_dir/cycle.txt.xz > /tmp/powercycle-cycle.txt"
 echo "  cargo run --release --manifest-path src/verify/rust/Cargo.toml \\"
 echo "    -- $k $n /tmp/powercycle-cycle.txt"
 echo "  python src/verify/python/verify-cycle.py $k $n /tmp/powercycle-cycle.txt"

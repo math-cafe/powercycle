@@ -338,11 +338,11 @@ A witness bundle contains:
 witness/k5-n246877/
 ├── README.md
 ├── README.fr.md
-├── cycle.txt.zst              existence
+├── cycle.txt.xz              existence
 ├── cycle.txt.sha256
-├── scan.txt.zst               lower bound, when minimality is claimed
+├── scan.txt.xz               lower bound, when minimality is claimed
 ├── scan.txt.sha256
-├── final.pcdump.json.zst      provenance
+├── final.pcdump.json.xz      provenance
 └── final.pcdump.json.sha256
 ```
 

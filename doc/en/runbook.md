@@ -125,7 +125,7 @@ there is no minimality to certify.
           fish scripts/prepare-witness.fish 4 9641 \
               cycle.txt <dump>.pcdump.json scan.txt
 
-It writes `witness/k<k>-n<n>/`, storing each artifact zstd-compressed next to
+It writes `witness/k<k>-n<n>/`, storing each artifact xz-compressed next to
 the SHA-256 of its **uncompressed** form.
 
 When a checksum file already exists it must match, so re-running the script on
