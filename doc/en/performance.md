@@ -154,7 +154,7 @@ absorbed satellite, **3.2×**.
 
 ---
 
-## 2.6 The lever was not in the hot path
+### 2.6 The lever was not in the hot path
 
 Everything above is throughput work, and it earned its place: without the
 batched `three-opt-21` the `k = 6` factor would still be sitting at eighteen
@@ -315,16 +315,100 @@ untried lever.
 
 ---
 
-## 5. Peak memory
+## 5. How the cost grows
+
+End-to-end time to a Hamiltonian cycle at the minimal `n`, one run each,
+`--max-depth=9`:
+
+| k | n_min | time | n ratio | time ratio | local exponent |
+|---|---|---|---|---|---|
+| 2 | 32 | 0.008 s | — | — | — |
+| 3 | 473 | 0.003 s | 14.8 | 0.4 | — |
+| 4 | 9 641 | 0.035 s | 20.4 | 12 | 0.81 |
+| 5 | 246 877 | 7.1 s | 25.6 | 203 | 1.64 |
+| 6 | 15 748 961 | ~27 h 45 | 63.8 | 14 052 | 2.30 |
+
+`k = 2` and `k = 3` are below the resolution of the measurement — process
+startup dominates, and `k = 3` comes out faster than `k = 2` because its raw
+factor closes in one tour where `k = 2` needs a patch. Only `k = 4, 5, 6`
+carry information.
+
+**In `n` the cost is roughly quadratic.** Least squares on those three points:
+
+```text
+time ~ 3e-10 * n^2.02   seconds
+```
+
+which reproduces `k = 5` to within a factor of 3.3. That is the useful shape:
+polynomial in `n`, not exponential. For scale, an `n^n` law would put `k = 6`
+at `10^113000000` seconds against the 10^5 measured.
+
+**But the exponent is climbing** — 0.81, 1.64, 2.30. Three points cannot say
+whether it settles or whether this is the approach to the exponential regime a
+SAT solver is entitled to. `n^2` is the trend observed, not a law established.
+
+**The cross-`k` fit is optimistic.** Each row is the *first* admissible `n` of
+its island, and island starts are the easiest instances in their island. Within
+a single `k` the exponent is worse: `G_5(490463)` costs 51.8 s against 7.1 s
+for `G_5(246877)`, so 1.99 times the vertices for 7.3 times the time — an
+exponent of 2.89.
+
+**The explosion lives in `k`, not in `n`.** From
+[`islands.md`](islands.md), the first admissible `n` is `(m+1)^k - m^k/2` with
+`m` the binding self-loop base, and `m` grows like `2k + O(1)`. So
+
+```text
+log n_min(k) ~ k log 2k
+```
+
+Composing the two gives the real shape of the wall:
+
+```text
+log(time) ~ 2 k log 2k
+```
+
+Cost polynomial in the instance, instance exponential in `k log k`. Each
+increment of `k` has multiplied the total by 10^1 to 10^4 so far, and nothing
+about the algorithms explains it: the instance is simply growing that fast.
+
+**Projection.** The same regression puts `k = 7`, at `n = 587 761 723`, near
+
+```text
+1.5e8 s  ~  5 years
+```
+
+with an uncertainty of at least an order of magnitude in each direction. The
+figure is academic: by section 6 the memory floor at `k = 7` is 89 GB against
+60 GB of RAM, so memory refuses the instance long before time does.
+
+---
+
+## 6. Peak memory
 
 Predictable only in its floor. The static cost — graph plus base formula — is
 computable exactly; the solver's learned-clause database is not.
+
+The graph costs 32 bytes per edge and 8 per vertex, which is the representation
+in `core::graph`. Calibrating the formula against the three measured floors
+gives 3.56 bytes per literal, consistent with the 4 bytes CaDiCaL stores per
+literal, and reproduces all three to two digits:
+
+```text
+floor = 32 * edges + 8 * n + 3.56 * literals
+```
 
 | | floor | observed | ratio |
 |---|---|---|---|
 | `G_5(246877)` | 0.03 GB | 0.33 GB | 11.2 |
 | `G_5(490463)` | 0.07 GB | 0.93 GB | 12.6 |
 | `G_6(15748961)` | 2.38 GB | 9.88 GB | 4.2 |
+| `G_7(587761723)` | **89 GB** | — | — |
+
+The `k = 7` row is the arithmetic, not a measurement: 35.7 GB of graph and
+53.7 GB of formula over 15.1 billion literals. It is the reason `k = 7` is out
+of reach on a 60 GB machine regardless of the time projection in section 5 —
+the floor alone exceeds physical memory by half, before a single learned clause.
+At the ratio observed on `G_6` the peak would be near 375 GB.
 
 A guard should refuse when the floor exceeds available memory, since that is
 arithmetic rather than prediction, and warn when five times the floor does.
