@@ -26,7 +26,7 @@ for argument in $argv
     end
 end
 
-set -l failures
+set -g failures
 
 function step --argument-names label
     set_color --bold
