@@ -147,7 +147,9 @@ expected and the script is right to refuse.
 
 Formatting, clippy with warnings denied, the test suite, a release build, then
 for every bundle: checksums, both independent verifiers, and a replay of the
-scan certificate compared byte for byte.
+scan certificate compared byte for byte. Finally it runs this whole runbook in
+miniature on `k = 2`, building a throwaway bundle and removing it, since
+verifying committed bundles never exercises the bundler.
 
 - [ ] update the results table in `README.md` and `README.fr.md`
 - [ ] update `CITATION.cff` if the result set changed

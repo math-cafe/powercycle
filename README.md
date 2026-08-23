@@ -120,7 +120,9 @@ cargo test --release -- --ignored   # long cross-checks, about a minute
 
 `scripts/check.fish` is the pre-publication gate: formatting, lints, tests,
 release build, then for each bundle in `witness/` it re-derives the checksums,
-runs both independent verifiers and replays the lower-bound certificate.
+runs both independent verifiers and replays the lower-bound certificate. It
+finishes by building a throwaway bundle for `k = 2`, which is the only way to
+exercise the bundler itself, and removing it again.
 
 ## Licence
 

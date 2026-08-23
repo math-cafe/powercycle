@@ -125,7 +125,8 @@ cargo test --release -- --ignored   # contrôles croisés longs, environ une min
 `scripts/check.fish` est le garde-fou avant publication : formatage, lints,
 tests, build release, puis pour chaque bundle de `witness/` il recalcule les
 checksums, lance les deux vérificateurs indépendants et rejoue le certificat de
-borne inférieure.
+borne inférieure. Il termine en construisant un bundle jetable pour `k = 2`,
+seul moyen d'exercer le constructeur lui-même, puis le supprime.
 
 ## Licence
 

@@ -387,6 +387,11 @@ cross-checks and a release build, then re-derives every claim in `witness/`:
 checksums, both independent verifiers, and a byte-for-byte replay of each
 lower-bound certificate.
 
+Verifying committed bundles never runs `prepare-witness.fish`, so the check
+ends by building a throwaway bundle for `k = 2`, asserting it lands under
+`witness/` and nowhere else, verifying it, confirming that a second run checks
+the checksums rather than rewriting them, and removing it.
+
 It is the single command to run before publishing a result.
 
 ## 13. Documentation policy

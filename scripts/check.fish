@@ -149,6 +149,102 @@ for bundle in $project_root/witness/k*-n*/
     end
 end
 
+# Verifying published bundles never runs the bundler, so a fault in it is
+# invisible here: moving the script once made it write outside witness/ and
+# record fresh checksums instead of verifying committed ones. This builds a
+# throwaway bundle for the smallest Hamiltonian case and removes it again.
+step "bundle construction"
+
+set -l probe_k 2
+set -l probe_n 32
+set -l probe_bundle "$project_root/witness/k$probe_k-n$probe_n"
+
+if test -e "$probe_bundle"
+    echo "    skipped: $probe_bundle exists and will not be touched"
+else
+    set -l probe_run (./target/release/pc-search --dump=records \
+        --on-hamiltonian=stop $probe_k $probe_n 2>/dev/null)
+
+    set -l probe_dumps $probe_run/dumps/*patched*c0001*.pcdump.json
+
+    if test (count $probe_dumps) -eq 0
+        record_failure "bundle construction: no one-cycle dump"
+    else
+        ./target/release/pc-export $probe_dumps[1] \
+            >"$work/probe-cycle.txt" 2>/dev/null
+
+        ./target/release/pc-scan $probe_k 1 $probe_n \
+            >"$work/probe-scan.txt" 2>/dev/null
+
+        if fish "$project_root/scripts/prepare-witness.fish" \
+                $probe_k $probe_n "$work/probe-cycle.txt" \
+                $probe_dumps[1] "$work/probe-scan.txt" >/dev/null
+            echo "    built"
+        else
+            record_failure "bundle construction: prepare-witness failed"
+        end
+
+        # It must land under witness/, not beside whatever invoked it.
+        if test -f "$probe_bundle/cycle.txt.zst"
+            echo "    landed in witness/k$probe_k-n$probe_n"
+        else
+            record_failure "bundle construction: not written to witness/"
+        end
+
+        set -l strays (find $project_root -type d -name witness \
+            -not -path "$project_root/witness" -not -path '*/target/*')
+
+        if test -z "$strays"
+            echo "    no stray witness root"
+        else
+            record_failure "bundle construction: stray root $strays"
+        end
+
+        # A bundle the script accepts must still be a valid witness: an empty
+        # cycle.txt has a perfectly good checksum.
+        if test -f "$probe_bundle/cycle.txt.zst"
+            zstd -dcq "$probe_bundle/cycle.txt.zst" >"$work/probe-back.txt"
+
+            set -l lines (wc -l <"$work/probe-back.txt" | string trim)
+
+            if test "$lines" -eq $probe_n
+                echo "    $probe_n vertices round-tripped"
+            else
+                record_failure "bundle construction: $lines lines"
+            end
+
+            if ./src/verify/rust/target/release/powercycle-verify \
+                    $probe_k $probe_n "$work/probe-back.txt" >/dev/null
+                echo "    rust verifier: VALID"
+            else
+                record_failure "bundle construction: rust verifier"
+            end
+
+            if python3 src/verify/python/verify-cycle.py \
+                    $probe_k $probe_n "$work/probe-back.txt" >/dev/null
+                echo "    python verifier: VALID"
+            else
+                record_failure "bundle construction: python verifier"
+            end
+        end
+
+        # Re-running on an existing bundle must verify, never overwrite.
+        if fish "$project_root/scripts/prepare-witness.fish" \
+                $probe_k $probe_n "$work/probe-cycle.txt" \
+                $probe_dumps[1] "$work/probe-scan.txt" >/dev/null
+            echo "    re-run verifies existing checksums"
+        else
+            record_failure "bundle construction: not idempotent"
+        end
+    end
+
+    rm -rf "$probe_bundle"
+
+    if test -n "$probe_run"
+        rm -rf "$probe_run"
+    end
+end
+
 rm -rf $work
 
 echo ""
