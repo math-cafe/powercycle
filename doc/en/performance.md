@@ -154,6 +154,39 @@ absorbed satellite, **3.2×**.
 
 ---
 
+## 2.6 The lever was not in the hot path
+
+Everything above is throughput work, and it earned its place: without the
+batched `three-opt-21` the `k = 6` factor would still be sitting at eighteen
+thousand cycles. But none of it produced the witness.
+
+After all of it, the patch ran about thirty-four hours and stopped at a local
+fixed point: seven cycles, 116 vertices outside a giant of 15 748 845. No
+alternating repair existed at depth 4, and proving that took 29 seconds.
+
+Raising the depth closed the factor in two minutes.
+
+| repair depth | outcome | time |
+|---|---|---|
+| 4 | fixed point at 7 cycles | ~34 h of patching |
+| 6 | 5 repairs, down to 2 cycles | 78 s |
+| 9 | 1 repair, one cycle | 21 s |
+
+Two runs from different fixed points — 7 cycles and 9 — converged on the same
+shape at depth 6, one giant and a single satellite of ten vertices, and both
+closed at depth 9 on distinct valid cycles.
+
+`ALTERNATING_REPAIR_MAX_DEPTH` was a compile-time constant when this work
+started. Exposing it as a flag was logged as a fifteen-minute convenience,
+somewhere below the batching in priority. It was the decisive parameter.
+
+The lesson is not that profiling was wasted — it was necessary to reach the
+fixed point at all. It is that a search bound is a parameter like any other,
+and leaving one hard-coded hides it from exactly the kind of measurement the
+rest of this document applies everywhere else.
+
+---
+
 ## 3. Dropped
 
 ### 3.1 Feeding propagated units to the SAT solver
