@@ -410,6 +410,23 @@ of reach on a 60 GB machine regardless of the time projection in section 5 —
 the floor alone exceeds physical memory by half, before a single learned clause.
 At the ratio observed on `G_6` the peak would be near 375 GB.
 
+The graph alone does fit, and that much was measured: `pc-scan 7 587761723`
+builds it, runs the full preflight and reports `CANDIDATE`, so the first
+admissible `n` at `k = 7` survives every implemented obstruction. Run under
+`systemd-run --user -P --wait`, which reports the cgroup peaks:
+
+| | estimate | RAM peak | swap peak | wall | CPU |
+|---|---|---|---|---|---|
+| `pc-scan 7 587761723` | 35.7 GB | 56 GB | 6.9 GB | 7 min 55 | 7 min 52 |
+
+The estimate is the graph term of the floor, which is also what `pc-scan`
+prints in its warning. The preflight needs about 1.6 to 1.8 times that,
+depending on whether the two peaks coincide, and on a 60 GB machine it only
+completes by spilling to swap. The swap costs little time — CPU time is within
+three seconds of wall time — but it leaves no headroom. `pc-search` runs the
+same preflight before its first tour, so a `k = 7` search on this machine
+would pass through this peak before reaching the formula at all.
+
 A guard should refuse when the floor exceeds available memory, since that is
 arithmetic rather than prediction, and warn when five times the floor does.
 Not implemented.
