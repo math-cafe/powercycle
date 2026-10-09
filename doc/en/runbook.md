@@ -109,9 +109,17 @@ same bytes.
 
 Plain output, no `--compact`: one line per `n`, each rejection naming the
 offending vertex and its degree, then the `CANDIDATE` verdict at the threshold.
-This is the half of the result that establishes minimality, and it is cheap —
-the whole range for `k = 7` takes about six minutes, since rejections need no
-graph.
+This is the half of the result that establishes minimality.
+
+Rejections need no graph, but the threshold line does: the last `n` is built
+and preflighted exactly as in step 1. Do not bound it with `--max-graph-n` —
+`check.fish` replays `pc-scan <k> 1 <n>` unbounded and compares byte for byte,
+so an `UNCHECKED` last line fails verification.
+
+At `k = 7` the run took 28 min: about 8 for the graph, the rest for the
+587 761 722 rejections and their 33 GB of output, against 4 min 30 for the same
+range with `--compact`. The memory peak is the preflight's, 56 GB
+plus 6 GB of swap, see section 6 of [`performance.md`](performance.md).
 
 Skip this step only when `n` is not the first admissible value, in which case
 there is no minimality to certify.
