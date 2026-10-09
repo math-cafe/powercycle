@@ -179,7 +179,7 @@ fn scan_quick_only_never_builds_a_graph() {
     let stderr = std::str::from_utf8(&output.stderr).unwrap();
 
     assert!(
-        stderr.contains("graphs built         : 0"),
+        stderr.contains("graphs built          : 0"),
         "--quick-only must build no graph"
     );
 }

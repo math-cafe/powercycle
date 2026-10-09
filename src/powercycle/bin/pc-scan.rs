@@ -131,8 +131,8 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
     }
 
     eprintln!("pc-scan: summary");
-    eprintln!("pc-scan:   scanned              : {}", stats.scanned);
-    eprintln!("pc-scan:   impossible           : {}", stats.impossible);
+    eprintln!("pc-scan:   scanned               : {}", stats.scanned);
+    eprintln!("pc-scan:   impossible            : {}", stats.impossible);
     eprintln!(
         "pc-scan:   quick degree rejects  : {}",
         stats.quick_degree_rejections
@@ -141,15 +141,15 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
         "pc-scan:   full preflight rejects: {}",
         stats.full_preflight_rejections
     );
-    eprintln!("pc-scan:   candidates           : {}", stats.candidates);
+    eprintln!("pc-scan:   candidates            : {}", stats.candidates);
 
     if stats.unchecked > 0 {
-        eprintln!("pc-scan:   unchecked            : {}", stats.unchecked);
+        eprintln!("pc-scan:   unchecked             : {}", stats.unchecked);
     }
 
-    eprintln!("pc-scan:   graphs built         : {}", stats.graphs_built);
+    eprintln!("pc-scan:   graphs built          : {}", stats.graphs_built);
     eprintln!(
-        "pc-scan:   elapsed              : {:.3} s",
+        "pc-scan:   elapsed               : {:.3} s",
         start_time.elapsed().as_secs_f64()
     );
 
