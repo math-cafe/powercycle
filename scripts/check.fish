@@ -7,7 +7,8 @@
 #
 # Runs the code checks, then re-derives every published claim from the
 # committed witness bundles: checksums, both independent verifiers, and a
-# byte-for-byte replay of each lower-bound certificate.
+# byte-for-byte replay of each lower-bound certificate. Then it builds a
+# throwaway bundle, and checks scripts/islands-chain.py against pc-scan.
 #
 # --quick skips the ignored long-running cross-checks in the test suite.
 
@@ -242,6 +243,40 @@ else
 
     if test -n "$probe_run"
         rm -rf "$probe_run"
+    end
+end
+
+# islands.md section 5 rests on scripts/islands-chain.py, which shares no code
+# with pc-scan. Both must name the same smallest blocking vertex for every n up
+# to the final island.
+step "island chain"
+
+for chain_k in 2 3 4 5
+    if not scripts/islands-chain.py $chain_k --ranges >"$work/chain.txt"
+        record_failure "island chain k = $chain_k: script failed"
+        continue
+    end
+
+    set -l final_start (tail -n 1 "$work/chain.txt" | string split \t)[1]
+
+    # Group pc-scan's per-n verdicts into the same start, end, vertex ranges.
+    ./target/release/pc-scan --quick-only $chain_k 1 $final_start 2>/dev/null \
+        | awk -F '\t' '
+            {
+                split($3, field, /[= ]/)
+                vertex = ($2 == "IMPOSSIBLE") ? field[3] : "-"
+                if (vertex != current) {
+                    if (NR > 1) print start "\t" NR - 1 "\t" current
+                    start = NR
+                    current = vertex
+                }
+            }
+            END { print start "\t" NR "\t" current }' >"$work/scan-ranges.txt"
+
+    if diff -q "$work/scan-ranges.txt" "$work/chain.txt" >/dev/null
+        echo "    k = $chain_k: agrees on n = 1..$final_start"
+    else
+        record_failure "island chain k = $chain_k"
     end
 end
 

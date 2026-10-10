@@ -152,6 +152,11 @@ while True:
     first, second = usable_bases(x)
     end = second**K - x - 1
 
+    # x blocks at n, so its band reaches at least n. Anything else is a bug,
+    # and would otherwise loop forever instead of failing.
+    if end < n:
+        sys.exit(f"islands-chain: band of {x} ends at {end}, before n = {n}")
+
     emit(n, end, x, f"v={x}  {kind(x)}  powers {first}^{K}, {second}^{K}")
 
     n = end + 1
