@@ -124,7 +124,8 @@ the next power.
 | 7 | `306110016 = 18^7/2` | `19^7` | 587 761 723 |
 
 `m = 2k + 2` for `k = 2..5`, then `2k + 4` for `k = 6..9`, then `2k + 6` for
-`k = 10..12`. The jumps are why no single closed form covers every `k`: at
+`k = 10..12`. The jumps are why no single closed form covers every `k` —
+section 5 shows where they come from. At
 `k = 6` the candidate from `m = 14` would be 7 625 857, but `14^6 = 7529536`
 is below it, and the vertices from there up hold only `15^6` in their window.
 That island is a phantom.
@@ -139,7 +140,107 @@ it is bounded above at q^k - 1    <=>   (1 + 2/q)^k > 2
 
 ---
 
-## 5. What this does and does not prove
+## 5. The chain of blocking vertices
+
+Section 1 describes every band at once. Following only the **smallest**
+blocking vertex as `n` grows — the vertex `pc-scan` names — explains the shape
+of the table in section 3.
+
+**Three kinds of blocker.** Counting the powers in the window,
+
+```text
+deg(x) = floor((x+n)^(1/k)) - floor(x^(1/k)) - [2x is a k-th power]
+```
+
+At fixed `n` the degree only drops along `x` where `x` reaches a power `p`,
+which leaves the window, or the loop position `p/2`. The smallest blocking
+vertex is therefore always `1`, a power `a^k`, or a loop position `a^k/2` with
+`a` even. The last two each lose a power: `a^k` sits at the left edge of its
+own window, and `a^k/2` cannot use `2x = a^k`.
+
+**The window test.** Since `n >= x`, vertex `x` blocks on entry exactly when
+`(x, 2x]` holds fewer than two usable powers. Otherwise both neighbours are at
+most `x` and already present. A blocking `x` holds its band up to
+`p_2 - x - 1`.
+
+**The chain at `k = 7`**, read from the scan:
+
+```text
+1, 2^7/2, 3^7, 4^7/2, 5^7, 6^7/2, 7^7, 8^7/2, 9^7, 10^7/2,
+12^7/2, 12^7, 14^7/2, 14^7, 16^7/2, 16^7, 18^7/2,
+    island [587761723, 612220031]
+18^7, 20^7/2,
+    final island from 1161088541
+```
+
+For even `a`, `a^k/2` comes before `a^k`: both wait for the same two powers,
+and the smaller vertex holds the longer band, which contains the other. For odd
+`a` there is no loop vertex, so `a^k` blocks in turn until the next loop
+position arrives below it, `(a+1)^k / 2 < a^k`. That is
+
+```text
+odd powers stop blocking first   once   ((a+1)/a)^k < 2,   roughly a > k/ln 2 - 1/2
+```
+
+which is why 11^7 is missing above. From there on the chain runs over even `a`
+only, and each loop vertex `a^k/2` uses `(a-1)^k` and `(a+1)^k`.
+
+**One condition, not two.** `q^k` blocks when `(q+1)^k` and `(q+2)^k` do not
+both fit in `(q^k, 2q^k]`, and `(q+2)^k/2` blocks when `q^k` and `(q+1)^k` are
+not both above it. Both reduce to the same inequality:
+
+```text
+q^k blocks   <=>   (q+2)^k > 2 q^k   <=>   (q+2)^k / 2 blocks
+```
+
+So when an island closes at `q^k - 1`, the loop vertex `(q+2)^k/2` takes over,
+and its band ends at `(q+3)^k - (q+2)^k/2 - 1`. The island condition
+`(1 + 1/q)^k < 3/2` only gets easier as `q` grows, so a new island opens there,
+and the chain stops for good at the first `q` that fails the bound condition.
+
+**Counting the finite islands.** They are the even `q` satisfying both
+conditions of section 4. With `ln(1+x) ~ x / (1 + x/2)`:
+
+```text
+k / ln(3/2) - 1/2   <   q   <   2k / ln 2 - 1        i.e.   2.466 k - 0.5  <  q  <  2.885 k - 1
+```
+
+An interval of length about `0.42 k`, so about `0.21 k` finite islands, give or
+take one depending on where the even integers fall. Near its ends only the
+exact conditions decide: `(25/24)^10 = 1.504` excludes `q = 24` at `k = 10`,
+and `(23/22)^9 = 1.492` admits `q = 22` at `k = 9`.
+
+| k | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| finite islands at `q` | — | — | 10 | 12 | 16 | 18 | 20, 22 | 22, 24 | 26 | 28, 30 | 30, 32 |
+
+which is the table of section 3, island for island.
+
+**The jumps of `m`.** The first candidate is `(q+1)^k - q^k/2` for the
+smallest even `q` with `(1 + 1/q)^k < 3/2`, roughly the first even integer
+above `2.466 k - 0.5`. That is `2k + 0.466 k`, so `m - 2k` grows by two about
+every 4.3 values of `k`: the steps `2k + 2`, `2k + 4`, `2k + 6` of section 4.
+When that first `q` already fails the bound condition, the first island is the
+unbounded one: `q = 6` at `k = 2`, `q = 8` at `k = 3`. The phantom at `k = 6`
+is `q = 14` just missing the island condition: `(15/14)^6 = 1.513`.
+
+**How this was checked.** The chain is computed by
+[`scripts/islands-chain.py`](../../scripts/islands-chain.py), a separate sweep
+in exact integers over the three kinds of candidate:
+
+    scripts/islands-chain.py 7            # the chain, readable
+    scripts/islands-chain.py 7 --ranges   # start, end, vertex
+
+For `k = 2..6` its `--ranges` output agrees with `pc-scan --quick-only` on
+every `n` up to the start of the final island, blocking vertex included; for
+`k = 7..12` it agrees at every island boundary.
+Beyond `u64` it predicts three finite islands at `k = 13` (`q = 32, 34, 36`)
+and two at `k = 14` (`q = 36, 38`, a first step at `2k + 8`), which `pc-scan`
+cannot replay.
+
+---
+
+## 6. What this does and does not prove
 
 `n` outside `I_k` is proof of non-Hamiltonicity, and the certificate is four
 integers: the interval, the offending vertex, and the two powers bracketing its
@@ -157,7 +258,7 @@ rather than bounds. For `k >= 6` only the lower bound is established.
 
 ---
 
-## 6. Verification
+## 7. Verification
 
 The table has three independent derivations that agree:
 
