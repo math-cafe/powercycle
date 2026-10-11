@@ -23,7 +23,7 @@ n_min(6) = 15748961
 
 **Existence** is `cycle.txt`.
 
-**Lower bound** is `scan.txt`: for every `n` in `[1, 15748960]` the graph
+**Lower bound** is `bands.txt`: for every `n` in `[1, 15748960]` the graph
 `G_6(n)` has a vertex of degree at most one, which no Hamiltonian cycle can
 use. The binding vertex just below the threshold is
 
@@ -50,7 +50,7 @@ Of the **uncompressed** artifacts:
 
 ```text
 cycle.txt          5f2b4192388caf362098311b1363163bfb78b554fb2ae8109608f773f50066c5
-scan.txt           eb9f0c13ea120f2e74f709bdb61b4c694e6a41990b472c192325b34cddddf86c
+bands.txt          015b5be7015d2f6d1756a02068fa0202b5472442c0e3ca09d52a3935ed93b06e
 final.pcdump.json  df6402b4d5ebd5a68ba59a2d4d6edfae99efa83c6f46a9fc6da0c97613bf0402
 ```
 
@@ -58,11 +58,14 @@ The cycle is exported canonically: rotated so vertex `1` is first, oriented so
 the smaller neighbour of `1` is second. It begins `1, 63, ...`, ends at
 `531440`, and closes with `531440 + 1 = 531441 = 9^6`.
 
-`scan.txt` is the `pc-scan` output for `n = 1 .. 15748961`: 15 748 960 lines of
-`IMPOSSIBLE` with the offending vertex and its degree, then the `CANDIDATE`
-verdict at the threshold. It compresses 120-fold because every rejection in the
-range comes from the graph-free degree check, so reproducing it builds no graph
-and takes 25 seconds.
+`bands.txt` is the `pc-scan --bands` output for `n = 1 .. 15748960`: 16 lines,
+each a range of `n` with the offending vertex and its degree. The degree of a
+vertex never decreases as `n` grows, since its window only widens, so a band
+that holds at both ends holds throughout; the verifiers check each band at its
+two endpoints. Every rejection in the range comes from the graph-free degree
+check, so reproducing it builds no graph and takes about 6 seconds. Up to
+version 0.1.0 the bundle carried `scan.txt` instead, one line per `n`, still
+available at the tag `witness-k6-n15748961`.
 
 ## Provenance
 
@@ -112,22 +115,29 @@ cargo run --release --manifest-path src/verify/rust/Cargo.toml \
 python src/verify/python/verify-cycle.py 6 15748961 /tmp/powercycle-cycle.txt
 ```
 
-The lower bound is re-derived with:
+The lower bound is checked, and replayed, with:
 
 ```console
-xz -dc witness/k6-n15748961/scan.txt.xz > /tmp/powercycle-scan.txt
-cargo run --release --bin pc-scan -- 6 1 15748961 | diff - /tmp/powercycle-scan.txt
+xz -dc witness/k6-n15748961/bands.txt.xz > /tmp/powercycle-bands.txt
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 6 15748961 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py 6 15748961 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 6 1 15748960 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
-Both verifiers are independent of the powercycle libraries: they use only `k`,
-`n` and the candidate witness.
+The verifiers are independent of the powercycle libraries: they use only `k`,
+`n` and the file they check.
 
 ## Files
 
 - `cycle.txt.xz` — compressed canonical Hamiltonian-cycle witness (24 MB).
 - `cycle.txt.sha256` — SHA-256 of the uncompressed `cycle.txt`.
-- `scan.txt.xz` — compressed `pc-scan` lower-bound certificate (4.5 MB).
-- `scan.txt.sha256` — SHA-256 of the uncompressed `scan.txt`.
+- `bands.txt.xz` — compressed `pc-scan --bands` lower-bound certificate (328 bytes).
+- `bands.txt.sha256` — SHA-256 of the uncompressed `bands.txt`.
 - `final.pcdump.json.xz` — compressed final dump with provenance (11 MB).
 - `final.pcdump.json.sha256` — SHA-256 of the uncompressed final dump.
 - `README.md` — this document.

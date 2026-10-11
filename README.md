@@ -50,11 +50,13 @@ checks that it is a permutation of `1..n` whose consecutive sums, closure
 included, are perfect `k`-th powers. Neither reads a dump, an edge ID, a patch
 history or anything produced by the solver.
 
-To re-derive the lower bound instead:
+The lower bound is a dozen lines, checked the same way by two verifiers of its
+own, or replayed by `pc-scan`:
 
 ```console
-xz -dc witness/k5-n246877/scan.txt.xz > /tmp/scan.txt
-cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/scan.txt
+xz -dc witness/k5-n246877/bands.txt.xz > /tmp/bands.txt
+python src/verify/python/verify-bands.py 5 246877 /tmp/bands.txt
+cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 | diff - /tmp/bands.txt
 ```
 
 ## Tools
@@ -120,9 +122,10 @@ cargo test --release -- --ignored   # long cross-checks, about a minute
 
 `scripts/check.fish` is the pre-publication gate: formatting, lints, tests,
 release build, then for each bundle in `witness/` it re-derives the checksums,
-runs both independent verifiers and replays the lower-bound certificate. It
-finishes by building a throwaway bundle for `k = 2`, which is the only way to
-exercise the bundler itself, and removing it again.
+runs both independent verifiers on each cycle and each lower-bound certificate,
+and replays the certificate. It then builds a throwaway bundle for `k = 2`,
+which is the only way to exercise the bundler itself, and checks
+`scripts/islands-chain.py` against `pc-scan`.
 
 ## Licence
 

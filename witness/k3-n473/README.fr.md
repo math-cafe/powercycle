@@ -23,7 +23,7 @@ n_min(3) = 473
 
 **L'existence** est `cycle.txt`.
 
-**La borne inférieure** est `scan.txt` : pour tout `n` dans `[1, 472]`, le
+**La borne inférieure** est `bands.txt` : pour tout `n` dans `[1, 472]`, le
 graphe `G_3(n)` possède un sommet de degré au plus un, qu'aucun cycle
 hamiltonien ne peut emprunter. Le sommet contraignant juste sous le seuil est
 
@@ -50,7 +50,7 @@ Des artefacts **non compressés** :
 
 ```text
 cycle.txt          2638ac29ca8b0463836d96fac7c1eadda2638ceda07f20200b49db9b341d824f
-scan.txt           e8b3af39bd91954eb994811f83ed0c862db53690c680275deaf7a396a530aaf0
+bands.txt          e9717e68480df786ee177f7ff4b50263953457f6beb8c6c48fc3afcc7f5ae729
 final.pcdump.json  366314d4cc03ce77601a76fd4011ef63c79c679316992dafcb205cadb76c27d1
 ```
 
@@ -59,9 +59,13 @@ premier, orientation plaçant le plus petit voisin de `1` en second. Il commence
 par `1, 63, ...`, se termine par `342`, et se ferme sur
 `342 + 1 = 343 = 7^3`.
 
-`scan.txt` est la sortie de `pc-scan` pour `n = 1 .. 473` : les `472` premières
-lignes portent le verdict `IMPOSSIBLE` avec le sommet fautif et son degré, la
-dernière porte le verdict `CANDIDATE` à `473`.
+`bands.txt` est la sortie de `pc-scan --bands` pour `n = 1 .. 472` : 8
+lignes, chacune une plage de `n` avec le sommet de degré au plus un et son
+degré. Le degré d'un sommet ne décroît jamais quand `n` augmente, puisque sa
+fenêtre ne fait que s'élargir : une bande vraie à ses deux bouts l'est partout,
+et les vérificateurs contrôlent chaque bande à ses deux extrémités. Jusqu'à la
+version 0.1.0, le bundle portait à la place `scan.txt`, une ligne par `n`,
+toujours disponible au tag `witness-k3-n473`.
 
 ## Provenance
 
@@ -88,15 +92,22 @@ cargo run --release --manifest-path src/verify/rust/Cargo.toml \
 python src/verify/python/verify-cycle.py 3 473 /tmp/powercycle-cycle.txt
 ```
 
-La borne inférieure se rejoue avec :
+La borne inférieure se vérifie, et se rejoue, avec :
 
 ```console
-xz -dc witness/k3-n473/scan.txt.xz > /tmp/powercycle-scan.txt
-cargo run --release --bin pc-scan -- 3 1 473 | diff - /tmp/powercycle-scan.txt
+xz -dc witness/k3-n473/bands.txt.xz > /tmp/powercycle-bands.txt
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 3 473 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py 3 473 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 3 1 472 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
-Les deux vérificateurs sont indépendants des bibliothèques powercycle : ils
-n'utilisent que `k`, `n` et le témoin candidat.
+Les vérificateurs sont indépendants des bibliothèques powercycle : ils
+n'utilisent que `k`, `n` et le fichier qu'ils contrôlent.
 
 ## Licence
 

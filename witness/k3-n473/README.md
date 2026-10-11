@@ -23,7 +23,7 @@ n_min(3) = 473
 
 **Existence** is `cycle.txt`.
 
-**Lower bound** is `scan.txt`: for every `n` in `[1, 472]` the graph `G_3(n)`
+**Lower bound** is `bands.txt`: for every `n` in `[1, 472]` the graph `G_3(n)`
 has a vertex of degree at most one, which no Hamiltonian cycle can use. The
 binding vertex just below the threshold is
 
@@ -50,7 +50,7 @@ Of the **uncompressed** artifacts:
 
 ```text
 cycle.txt          2638ac29ca8b0463836d96fac7c1eadda2638ceda07f20200b49db9b341d824f
-scan.txt           e8b3af39bd91954eb994811f83ed0c862db53690c680275deaf7a396a530aaf0
+bands.txt          e9717e68480df786ee177f7ff4b50263953457f6beb8c6c48fc3afcc7f5ae729
 final.pcdump.json  366314d4cc03ce77601a76fd4011ef63c79c679316992dafcb205cadb76c27d1
 ```
 
@@ -58,9 +58,12 @@ The cycle is exported canonically: rotated so that vertex `1` is first, oriented
 so that the smaller neighbour of `1` is second. It begins `1, 63, ...`,
 ends at `342`, and closes with `342 + 1 = 343 = 7^3`.
 
-`scan.txt` is the `pc-scan` output for `n = 1 .. 473`: the first `472` lines
-are `IMPOSSIBLE` with the offending vertex and its degree, and the last line is
-the `CANDIDATE` verdict at `473`.
+`bands.txt` is the `pc-scan --bands` output for `n = 1 .. 472`: 8 lines,
+each a range of `n` with the vertex of degree at most one and its degree. The
+degree of a vertex never decreases as `n` grows, since its window only widens,
+so a band that holds at both ends holds throughout; the verifiers check each
+band at its two endpoints. Up to version 0.1.0 the bundle carried `scan.txt`
+instead, one line per `n`, still available at the tag `witness-k3-n473`.
 
 ## Provenance
 
@@ -87,15 +90,22 @@ cargo run --release --manifest-path src/verify/rust/Cargo.toml \
 python src/verify/python/verify-cycle.py 3 473 /tmp/powercycle-cycle.txt
 ```
 
-The lower bound is re-derived with:
+The lower bound is checked, and replayed, with:
 
 ```console
-xz -dc witness/k3-n473/scan.txt.xz > /tmp/powercycle-scan.txt
-cargo run --release --bin pc-scan -- 3 1 473 | diff - /tmp/powercycle-scan.txt
+xz -dc witness/k3-n473/bands.txt.xz > /tmp/powercycle-bands.txt
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 3 473 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py 3 473 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 3 1 472 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
-Both verifiers are independent of the powercycle libraries: they use only `k`,
-`n` and the candidate witness.
+The verifiers are independent of the powercycle libraries: they use only `k`,
+`n` and the file they check.
 
 ## Licence
 

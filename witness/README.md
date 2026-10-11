@@ -35,9 +35,14 @@ A bundle claiming a minimal `n` carries **both halves** of the statement.
 order. It is exported canonically: rotated so vertex `1` is first, oriented so
 the smaller neighbour of `1` is second.
 
-**Lower bound** is `scan.txt`, the `pc-scan` output over `1..n`. It records, for
-every smaller value, a vertex of degree at most one — which no Hamiltonian cycle
-can use.
+**Lower bound** is `bands.txt`, the `pc-scan --bands` output over `1..n-1`. It
+splits every smaller value into bands, each naming a vertex of degree at most
+one — which no Hamiltonian cycle can use — throughout its range. A dozen lines
+cover millions of values, because the degree of a vertex never decreases as `n`
+grows: equal at both ends of a band means equal throughout.
+
+Up to version 0.1.0 the lower bound was `scan.txt`, one line per `n`. It grew
+linearly with `n` — 33 GB at `k = 7` — and remains at the `witness-k*` tags.
 
 `final.pcdump.json` is provenance only. The mathematical certificate is the
 plain cycle.
@@ -92,3 +97,19 @@ Both verifiers live outside the powercycle dependency graph. They take only `k`,
 `n` and a candidate list, and check that it is a permutation of `1..n` whose
 consecutive sums, closure included, are perfect `k`-th powers. Neither reads a
 dump, an edge ID, a patch history or anything from the solver.
+
+For a bundle that claims minimality, the lower bound:
+
+```console
+xz -dc witness/k$K-n$N/bands.txt.xz > /tmp/powercycle-bands.txt
+sha256sum /tmp/powercycle-bands.txt          # must match bands.txt.sha256
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- $K $N /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py $K $N /tmp/powercycle-bands.txt
+```
+
+These two check that the bands cover `1..n-1` without gap and, at both ends of
+each band, recount the powers in the window of its vertex to confirm the claimed
+degree. Like the cycle verifiers, they use only `k`, `n` and the file.

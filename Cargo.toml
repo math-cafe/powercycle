@@ -1,6 +1,6 @@
 [package]
 name = "powercycle"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 ctrlc = "3.5.2"
 powercycle-config = { path = "src/powercycle/config" }
 powercycle-core = { path = "src/powercycle/core" }
-powercycle-format = { version = "0.1.0", path = "src/powercycle/format" }
+powercycle-format = { version = "0.2.0", path = "src/powercycle/format" }
 powercycle-patch = { path = "src/powercycle/patch" }
 powercycle-search = { path = "src/powercycle/search" }
 

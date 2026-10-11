@@ -3,7 +3,7 @@
 # Build a curated versioned witness bundle.
 #
 # Usage:
-#   scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]
+#   scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [bands.txt]
 #
 # The bundle is written to witness/k<k>-n<n>/. Each artifact is stored
 # xz-compressed, next to the SHA-256 of its uncompressed form. The checksum
@@ -14,14 +14,14 @@
 # it. Re-running the script on an existing bundle is therefore a verification
 # rather than a silent overwrite.
 #
-# The optional scan.txt is the pc-scan lower-bound certificate, as produced by
+# The optional bands.txt is the lower-bound certificate, as produced by
 #
-#   pc-scan <k> 1 <n>
+#   pc-scan --bands --quick-only <k> 1 <n-1>
 
 set -l project_root (realpath (status dirname)/..)
 
 if test (count $argv) -lt 4 -o (count $argv) -gt 5
-    echo "usage: scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [scan.txt]" >&2
+    echo "usage: scripts/prepare-witness.fish <k> <n> <cycle.txt> <final.pcdump.json> [bands.txt]" >&2
     exit 2
 end
 
@@ -30,10 +30,10 @@ set -l n $argv[2]
 set -l cycle_source $argv[3]
 set -l dump_source $argv[4]
 
-set -l scan_source ""
+set -l bands_source ""
 
 if test (count $argv) -ge 5
-    set scan_source $argv[5]
+    set bands_source $argv[5]
 end
 
 if not string match -qr '^[0-9]+$' -- $k
@@ -104,8 +104,8 @@ echo
 store_artifact "$cycle_source" cycle.txt "$witness_dir"; or exit 1
 store_artifact "$dump_source" final.pcdump.json "$witness_dir"; or exit 1
 
-if test -n "$scan_source"
-    store_artifact "$scan_source" scan.txt "$witness_dir"; or exit 1
+if test -n "$bands_source"
+    store_artifact "$bands_source" bands.txt "$witness_dir"; or exit 1
 end
 
 echo
@@ -114,3 +114,12 @@ echo "  xz -dc $witness_dir/cycle.txt.xz > /tmp/powercycle-cycle.txt"
 echo "  cargo run --release --manifest-path src/verify/rust/Cargo.toml \\"
 echo "    -- $k $n /tmp/powercycle-cycle.txt"
 echo "  python src/verify/python/verify-cycle.py $k $n /tmp/powercycle-cycle.txt"
+
+if test -n "$bands_source"
+    echo
+    echo "Verify the lower bound with:"
+    echo "  xz -dc $witness_dir/bands.txt.xz > /tmp/powercycle-bands.txt"
+    echo "  cargo run --release --manifest-path src/verify/rust/Cargo.toml \\"
+    echo "    --bin powercycle-verify-bands -- $k $n /tmp/powercycle-bands.txt"
+    echo "  python src/verify/python/verify-bands.py $k $n /tmp/powercycle-bands.txt"
+end

@@ -1,8 +1,8 @@
 //! Contract tests for the command-line tools.
 //!
-//! The published scan certificates are byte-for-byte `pc-scan` output, so its
-//! stdout format is part of the repository's promises, not an implementation
-//! detail. These tests pin it.
+//! The published lower-bound certificates are byte-for-byte `pc-scan --bands`
+//! output, so its stdout format is part of the repository's promises, not an
+//! implementation detail. These tests pin it.
 
 use std::process::{Command, Output};
 
@@ -62,10 +62,7 @@ fn scan_compact_mode_groups_consecutive_verdicts() {
     );
 }
 
-/// Guards the lower-bound half of the published k = 3 and k = 4 results.
-///
-/// If this breaks, `witness/k3-n473/scan.txt` and `witness/k4-n9641/scan.txt`
-/// no longer describe what the tool produces.
+/// Guards the threshold of the published k = 3 and k = 4 results.
 #[test]
 fn scan_reproduces_published_thresholds() {
     for (k, threshold, vertex) in [(3u32, 473usize, 256usize), (4, 9_641, 5_000)] {
@@ -97,6 +94,39 @@ fn scan_reproduces_published_thresholds() {
             "k={k} threshold should clear every implemented condition"
         );
     }
+}
+
+/// Pins the certificate format: the whole lower bound of `k = 3` in bands.
+///
+/// If this breaks, `witness/k3-n473/bands.txt` no longer describes what the
+/// tool produces.
+#[test]
+fn scan_bands_mode_is_the_published_certificate() {
+    let output = run(PC_SCAN, &["--bands", "--quick-only", "3", "1", "472"]);
+
+    assert!(output.status.success());
+
+    assert_eq!(
+        stdout_of(&output).lines().collect::<Vec<_>>(),
+        vec![
+            "1..6\tIMPOSSIBLE\tdegree<2 vertex=1 degree=0",
+            "7..25\tIMPOSSIBLE\tdegree<2 vertex=1 degree=1",
+            "26..59\tIMPOSSIBLE\tdegree<2 vertex=4 degree=1",
+            "60..97\tIMPOSSIBLE\tdegree<2 vertex=27 degree=1",
+            "98..183\tIMPOSSIBLE\tdegree<2 vertex=32 degree=1",
+            "184..234\tIMPOSSIBLE\tdegree<2 vertex=108 degree=1",
+            "235..295\tIMPOSSIBLE\tdegree<2 vertex=216 degree=1",
+            "296..472\tIMPOSSIBLE\tdegree<2 vertex=256 degree=1",
+        ],
+    );
+}
+
+#[test]
+fn scan_bands_mode_rejects_compact() {
+    let output = run(PC_SCAN, &["--bands", "--compact", "3", "1", "10"]);
+
+    assert!(!output.status.success());
+    assert!(stdout_of(&output).is_empty());
 }
 
 #[test]

@@ -24,7 +24,7 @@ n_min(6) = 15748961
 
 **L'existence** est `cycle.txt`.
 
-**La borne inférieure** est `scan.txt` : pour tout `n` dans `[1, 15748960]`, le
+**La borne inférieure** est `bands.txt` : pour tout `n` dans `[1, 15748960]`, le
 graphe `G_6(n)` possède un sommet de degré au plus un, qu'aucun cycle
 hamiltonien ne peut emprunter. Le sommet contraignant juste sous le seuil est
 
@@ -52,7 +52,7 @@ Des artefacts **non compressés** :
 
 ```text
 cycle.txt          5f2b4192388caf362098311b1363163bfb78b554fb2ae8109608f773f50066c5
-scan.txt           eb9f0c13ea120f2e74f709bdb61b4c694e6a41990b472c192325b34cddddf86c
+bands.txt          015b5be7015d2f6d1756a02068fa0202b5472442c0e3ca09d52a3935ed93b06e
 final.pcdump.json  df6402b4d5ebd5a68ba59a2d4d6edfae99efa83c6f46a9fc6da0c97613bf0402
 ```
 
@@ -61,11 +61,15 @@ premier, orientation plaçant le plus petit voisin de `1` en second. Il commence
 par `1, 63, ...`, se termine par `531440`, et se ferme sur
 `531440 + 1 = 531441 = 9^6`.
 
-`scan.txt` est la sortie de `pc-scan` pour `n = 1 .. 15748961` : 15 748 960
-lignes `IMPOSSIBLE` avec le sommet fautif et son degré, puis le verdict
-`CANDIDATE` au seuil. Il se comprime 120 fois parce que tous les rejets de
-l'intervalle proviennent du test de degré sans graphe — le rejouer ne construit
-aucun graphe et prend 25 secondes.
+`bands.txt` est la sortie de `pc-scan --bands` pour `n = 1 .. 15748960` : 16
+lignes, chacune une plage de `n` avec le sommet fautif et son degré. Le degré
+d'un sommet ne décroît jamais quand `n` augmente, puisque sa fenêtre ne fait que
+s'élargir : une bande vraie à ses deux bouts l'est partout, et les vérificateurs
+contrôlent chaque bande à ses deux extrémités. Tous les rejets de l'intervalle
+proviennent du test de degré sans graphe — le rejouer ne construit aucun graphe
+et prend environ 6 secondes. Jusqu'à la version 0.1.0, le bundle portait à la
+place `scan.txt`, une ligne par `n`, toujours disponible au tag
+`witness-k6-n15748961`.
 
 ## Provenance
 
@@ -118,22 +122,29 @@ cargo run --release --manifest-path src/verify/rust/Cargo.toml \
 python src/verify/python/verify-cycle.py 6 15748961 /tmp/powercycle-cycle.txt
 ```
 
-La borne inférieure se rejoue avec :
+La borne inférieure se vérifie, et se rejoue, avec :
 
 ```console
-xz -dc witness/k6-n15748961/scan.txt.xz > /tmp/powercycle-scan.txt
-cargo run --release --bin pc-scan -- 6 1 15748961 | diff - /tmp/powercycle-scan.txt
+xz -dc witness/k6-n15748961/bands.txt.xz > /tmp/powercycle-bands.txt
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 6 15748961 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py 6 15748961 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 6 1 15748960 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
-Les deux vérificateurs sont indépendants des bibliothèques powercycle : ils
-n'utilisent que `k`, `n` et le témoin candidat.
+Les vérificateurs sont indépendants des bibliothèques powercycle : ils
+n'utilisent que `k`, `n` et le fichier qu'ils contrôlent.
 
 ## Fichiers
 
 - `cycle.txt.xz` — témoin de cycle hamiltonien canonique, compressé (24 Mo).
 - `cycle.txt.sha256` — SHA-256 du `cycle.txt` non compressé.
-- `scan.txt.xz` — certificat de borne inférieure `pc-scan`, compressé (4,5 Mo).
-- `scan.txt.sha256` — SHA-256 du `scan.txt` non compressé.
+- `bands.txt.xz` — certificat de borne inférieure `pc-scan --bands`, compressé (328 octets).
+- `bands.txt.sha256` — SHA-256 du `bands.txt` non compressé.
 - `final.pcdump.json.xz` — dump final compressé, avec provenance (11 Mo).
 - `final.pcdump.json.sha256` — SHA-256 du dump final non compressé.
 - `README.md` — version anglaise, faisant foi.

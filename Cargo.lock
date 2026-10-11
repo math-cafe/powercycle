@@ -475,7 +475,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "powercycle"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ctrlc",
  "powercycle-config",
@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "powercycle-config"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "toml",
@@ -495,11 +495,11 @@ dependencies = [
 
 [[package]]
 name = "powercycle-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "powercycle-format"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "powercycle-core",
  "serde",
@@ -509,14 +509,14 @@ dependencies = [
 
 [[package]]
 name = "powercycle-patch"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "powercycle-core",
 ]
 
 [[package]]
 name = "powercycle-search"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "powercycle-config",
  "powercycle-core",

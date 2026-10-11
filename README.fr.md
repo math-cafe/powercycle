@@ -52,11 +52,13 @@ consécutives, fermeture comprise, sont des puissances `k`-ièmes parfaites. Auc
 ne lit de dump, d'identifiant d'arête, d'historique de patch ni quoi que ce soit
 produit par le solveur.
 
-Pour rejouer la borne inférieure :
+La borne inférieure tient en une douzaine de lignes, vérifiées de la même façon
+par deux vérificateurs qui lui sont propres, ou rejouées par `pc-scan` :
 
 ```console
-xz -dc witness/k5-n246877/scan.txt.xz > /tmp/scan.txt
-cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/scan.txt
+xz -dc witness/k5-n246877/bands.txt.xz > /tmp/bands.txt
+python src/verify/python/verify-bands.py 5 246877 /tmp/bands.txt
+cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 | diff - /tmp/bands.txt
 ```
 
 ## Outils
@@ -124,9 +126,10 @@ cargo test --release -- --ignored   # contrôles croisés longs, environ une min
 
 `scripts/check.fish` est le garde-fou avant publication : formatage, lints,
 tests, build release, puis pour chaque bundle de `witness/` il recalcule les
-checksums, lance les deux vérificateurs indépendants et rejoue le certificat de
-borne inférieure. Il termine en construisant un bundle jetable pour `k = 2`,
-seul moyen d'exercer le constructeur lui-même, puis le supprime.
+checksums, lance les deux vérificateurs indépendants sur chaque cycle et chaque
+certificat de borne inférieure, et rejoue le certificat. Il construit ensuite un
+bundle jetable pour `k = 2`, seul moyen d'exercer le constructeur lui-même, et
+confronte `scripts/islands-chain.py` à `pc-scan`.
 
 ## Licence
 

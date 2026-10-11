@@ -27,7 +27,7 @@ that is, `246877` is the least `n` for which `G_5(n)` has a Hamiltonian cycle.
 
 **Lower bound.** For every `n` in `[1, 246876]` the graph `G_5(n)` contains a
 vertex of degree at most one. A Hamiltonian cycle uses exactly two edges at every
-vertex, so no such `n` admits one. `scan.txt` records this vertex for each `n`.
+vertex, so no such `n` admits one. `bands.txt` records this vertex for each `n`.
 
 The obstruction is elementary and does not depend on any search. Vertex `v` is
 adjacent to `p - v` exactly when `p` is a perfect fifth power with
@@ -76,20 +76,24 @@ second. It begins `1, 31, 212, ...` and ends at `242`, closing with
 
 `cycle.txt.sha256` stores the checksum of the **uncompressed** witness.
 
-## Scan certificate
+## Lower-bound certificate
 
-The uncompressed `scan.txt` has SHA-256:
+The uncompressed `bands.txt` has SHA-256:
 
-`a1d8f02c74c32e08887fa921bfeeae15b4b59ca923f8c408b4545ad79a8e23ce`
+`42c068574e3e1b833ff8244c8ba93cca1e556217566acaa3bcb036bdeed7a65d`
 
-It is the `pc-scan` output for `n = 1 .. 246877`, one tab-separated record per
-line. The first `246876` lines are `IMPOSSIBLE` together with the offending
-vertex and its degree; the last line is the `CANDIDATE` verdict at `246877`. The
-file therefore contains the whole lower-bound argument and the threshold in one
-artifact.
+It is the `pc-scan --bands` output for `n = 1 .. 246876`: 12 tab-separated
+lines, each a range of `n` with the offending vertex and its degree. The degree
+of a vertex never decreases as `n` grows, since its window only widens, so a
+band that holds at both ends holds throughout. Checking each band at its two
+endpoints therefore settles every `n` below the threshold, and the file
+contains the whole lower-bound argument.
 
 Every rejection in the range comes from the graph-free degree check, so no graph
 is built while reproducing it.
+
+Up to version 0.1.0 the bundle carried `scan.txt` instead, one line per `n`,
+still available at the tag `witness-k5-n246877`.
 
 ## Provenance
 
@@ -138,14 +142,23 @@ python src/verify/python/verify-cycle.py \
   5 246877 /tmp/powercycle-cycle.txt
 ```
 
-The lower bound is re-derived with:
+The lower bound is checked by two independent verifiers of the same kind, then
+replayed:
 
 ```console
-xz -dc witness/k5-n246877/scan.txt.xz > /tmp/powercycle-scan.txt
+xz -dc witness/k5-n246877/bands.txt.xz > /tmp/powercycle-bands.txt
 
-sha256sum /tmp/powercycle-scan.txt
+sha256sum /tmp/powercycle-bands.txt
 
-cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/powercycle-scan.txt
+cargo run --release \
+  --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 5 246877 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py \
+  5 246877 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
 The SHA-256 values reported by the checksum commands must match the ones given
@@ -155,8 +168,8 @@ above.
 
 - `cycle.txt.xz` — compressed canonical Hamiltonian-cycle witness.
 - `cycle.txt.sha256` — SHA-256 of the uncompressed `cycle.txt`.
-- `scan.txt.xz` — compressed `pc-scan` lower-bound certificate.
-- `scan.txt.sha256` — SHA-256 of the uncompressed `scan.txt`.
+- `bands.txt.xz` — compressed `pc-scan --bands` lower-bound certificate.
+- `bands.txt.sha256` — SHA-256 of the uncompressed `bands.txt`.
 - `final.pcdump.json.xz` — compressed final powercycle dump with provenance.
 - `final.pcdump.json.sha256` — SHA-256 of the uncompressed final dump.
 - `README.md` — this document.

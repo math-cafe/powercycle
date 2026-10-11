@@ -105,21 +105,30 @@ same bytes.
 
 ## 4. Produce the lower-bound certificate
 
-- [ ] `./target/release/pc-scan 4 1 9641 > scan.txt`
+- [ ] `./target/release/pc-scan --bands --quick-only 4 1 9640 > bands.txt`
 
-Plain output, no `--compact`: one line per `n`, each rejection naming the
-offending vertex and its degree, then the `CANDIDATE` verdict at the threshold.
-This is the half of the result that establishes minimality.
+The range stops at `n - 1`: the certificate rules out every smaller value and
+says nothing about `n` itself, which the cycle settles. Each line is a band of
+consecutive values sharing one obstruction — a vertex and its degree, at most
+one — so the whole lower bound of `k = 4` is ten lines:
 
-Rejections need no graph, but the threshold line does: the last `n` is built
-and preflighted exactly as in step 1. Do not bound it with `--max-graph-n` —
-`check.fish` replays `pc-scan <k> 1 <n>` unbounded and compares byte for byte,
-so an `UNCHECKED` last line fails verification.
+      1..14     IMPOSSIBLE  degree<2 vertex=1 degree=0
+      15..79    IMPOSSIBLE  degree<2 vertex=1 degree=1
+      ...
+      5904..9640  IMPOSSIBLE  degree<2 vertex=5000 degree=1
 
-At `k = 7` the run took 28 min: about 8 for the graph, the rest for the
-587 761 722 rejections and their 33 GB of output, against 4 min 30 for the same
-range with `--compact`. The memory peak is the preflight's, 56 GB
-plus 6 GB of swap, see section 6 of [`performance.md`](performance.md).
+`--quick-only` is required, not a precaution: no graph is built, and a value
+that only a graph could decide would appear as `UNCHECKED` and fail both
+verifiers. If one does, `n` is not the first admissible value.
+
+- [ ] check it with both independent verifiers:
+
+          python src/verify/python/verify-bands.py 4 9641 bands.txt
+          ./src/verify/rust/target/release/powercycle-verify-bands 4 9641 bands.txt
+
+At `k = 7` the run takes about 4 min 30 and writes 18 lines. Up to version
+0.1.0 this step wrote one line per `n` — 33 GB in 28 min at `k = 7`, with a
+graph built for the last line.
 
 Skip this step only when `n` is not the first admissible value, in which case
 there is no minimality to certify.
@@ -131,7 +140,7 @@ there is no minimality to certify.
 - [ ] run the bundler:
 
           fish scripts/prepare-witness.fish 4 9641 \
-              cycle.txt <dump>.pcdump.json scan.txt
+              cycle.txt <dump>.pcdump.json bands.txt
 
 It writes `witness/k<k>-n<n>/`, storing each artifact xz-compressed next to
 the SHA-256 of its **uncompressed** form.
@@ -154,10 +163,10 @@ expected and the script is right to refuse.
 - [ ] `fish scripts/check.fish`
 
 Formatting, clippy with warnings denied, the test suite, a release build, then
-for every bundle: checksums, both independent verifiers, and a replay of the
-scan certificate compared byte for byte. Finally it runs this whole runbook in
-miniature on `k = 2`, building a throwaway bundle and removing it, since
-verifying committed bundles never exercises the bundler.
+for every bundle: checksums, both independent verifiers of the cycle and of the
+certificate, and a replay of the certificate compared byte for byte. Then it
+runs this whole runbook in miniature on `k = 2`, building a throwaway bundle and
+removing it, since verifying committed bundles never exercises the bundler.
 
 - [ ] update the results table in `README.md` and `README.fr.md`
 - [ ] update `CITATION.cff` if the result set changed

@@ -29,7 +29,7 @@ cycle hamiltonien.
 
 **Borne inférieure.** Pour tout `n` dans `[1, 246876]`, le graphe `G_5(n)`
 contient un sommet de degré au plus un. Un cycle hamiltonien emprunte exactement
-deux arêtes en chaque sommet, donc aucun de ces `n` n'en admet. `scan.txt`
+deux arêtes en chaque sommet, donc aucun de ces `n` n'en admet. `bands.txt`
 consigne ce sommet pour chaque `n`.
 
 L'obstruction est élémentaire et ne dépend d'aucune recherche. Le sommet `v` est
@@ -81,20 +81,24 @@ deux voisins de `1` est placé en deuxième position. Il commence par
 
 `cycle.txt.sha256` contient le checksum du témoin **non compressé**.
 
-## Certificat de scan
+## Certificat de borne inférieure
 
-Le fichier `scan.txt` non compressé a pour SHA-256 :
+Le fichier `bands.txt` non compressé a pour SHA-256 :
 
-`a1d8f02c74c32e08887fa921bfeeae15b4b59ca923f8c408b4545ad79a8e23ce`
+`42c068574e3e1b833ff8244c8ba93cca1e556217566acaa3bcb036bdeed7a65d`
 
-C'est la sortie de `pc-scan` pour `n = 1 .. 246877`, un enregistrement séparé par
-tabulations par ligne. Les `246876` premières lignes portent le verdict
-`IMPOSSIBLE` accompagné du sommet fautif et de son degré ; la dernière ligne
-porte le verdict `CANDIDATE` à `246877`. Le fichier contient donc tout l'argument
-de borne inférieure et le seuil dans un seul artefact.
+C'est la sortie de `pc-scan --bands` pour `n = 1 .. 246876` : 12 lignes séparées
+par tabulations, chacune une plage de `n` avec le sommet fautif et son degré. Le
+degré d'un sommet ne décroît jamais quand `n` augmente, puisque sa fenêtre ne
+fait que s'élargir : une bande vraie à ses deux bouts l'est partout. Contrôler
+chaque bande à ses deux extrémités règle donc tous les `n` sous le seuil, et le
+fichier contient tout l'argument de borne inférieure.
 
 Tous les rejets de l'intervalle proviennent du test de degré sans graphe : sa
 reproduction ne construit aucun graphe.
+
+Jusqu'à la version 0.1.0, le bundle portait à la place `scan.txt`, une ligne par
+`n`, toujours disponible au tag `witness-k5-n246877`.
 
 ## Provenance
 
@@ -147,14 +151,23 @@ python src/verify/python/verify-cycle.py \
   5 246877 /tmp/powercycle-cycle.txt
 ```
 
-La borne inférieure se rejoue avec :
+La borne inférieure est contrôlée par deux vérificateurs indépendants du même
+type, puis rejouée :
 
 ```console
-xz -dc witness/k5-n246877/scan.txt.xz > /tmp/powercycle-scan.txt
+xz -dc witness/k5-n246877/bands.txt.xz > /tmp/powercycle-bands.txt
 
-sha256sum /tmp/powercycle-scan.txt
+sha256sum /tmp/powercycle-bands.txt
 
-cargo run --release --bin pc-scan -- 5 1 246877 | diff - /tmp/powercycle-scan.txt
+cargo run --release \
+  --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- 5 246877 /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py \
+  5 246877 /tmp/powercycle-bands.txt
+
+cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 \
+  | diff - /tmp/powercycle-bands.txt
 ```
 
 Les SHA-256 rapportés par les commandes de checksum doivent correspondre à ceux
@@ -164,8 +177,8 @@ donnés ci-dessus.
 
 - `cycle.txt.xz` — témoin de cycle hamiltonien canonique, compressé.
 - `cycle.txt.sha256` — SHA-256 du `cycle.txt` non compressé.
-- `scan.txt.xz` — certificat de borne inférieure `pc-scan`, compressé.
-- `scan.txt.sha256` — SHA-256 du `scan.txt` non compressé.
+- `bands.txt.xz` — certificat de borne inférieure `pc-scan --bands`, compressé.
+- `bands.txt.sha256` — SHA-256 du `bands.txt` non compressé.
 - `final.pcdump.json.xz` — dump powercycle final compressé, avec provenance.
 - `final.pcdump.json.sha256` — SHA-256 du dump final non compressé.
 - `README.md` — version anglaise, faisant foi.

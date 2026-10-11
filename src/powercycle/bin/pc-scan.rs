@@ -50,14 +50,10 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
         options.k, options.start, options.end,
     );
 
-    if options.compact {
-        eprintln!("pc-scan: output mode compact");
-    } else {
-        eprintln!("pc-scan: output mode detailed");
-    }
+    eprintln!("pc-scan: output mode {}", options.mode);
 
     let mut stats = ScanStats::default();
-    let mut compact_group = None::<CompactGroup>;
+    let mut group = None::<Group>;
 
     for n in options.start..=options.end {
         let classification = classify(options.k, n, options.max_graph_n)?;
@@ -96,38 +92,42 @@ fn scan(options: ScanOptions) -> Result<(), Box<dyn Error>> {
             }
         }
 
-        if options.compact {
-            match compact_group {
-                Some(mut group) if group.status == classification.status => {
-                    group.end = n;
-                    compact_group = Some(group);
-                }
-
-                Some(group) => {
-                    print_compact_group(group);
-
-                    compact_group = Some(CompactGroup {
-                        start: n,
-                        end: n,
-                        status: classification.status,
-                    });
-                }
-
-                None => {
-                    compact_group = Some(CompactGroup {
-                        start: n,
-                        end: n,
-                        status: classification.status,
-                    });
-                }
-            }
-        } else {
+        if options.mode == OutputMode::Detailed {
             print_detailed(n, &classification);
+            continue;
+        }
+
+        // Compact groups by verdict alone; bands also keep the reason, so
+        // each group names one obstruction that holds across its range.
+        let reason = match options.mode {
+            OutputMode::Bands => classification.reason,
+            _ => None,
+        };
+
+        match group.as_mut() {
+            Some(current)
+                if current.status == classification.status && current.reason == reason =>
+            {
+                current.end = n;
+            }
+
+            _ => {
+                if let Some(finished) = group.take() {
+                    print_group(&finished);
+                }
+
+                group = Some(Group {
+                    start: n,
+                    end: n,
+                    status: classification.status,
+                    reason,
+                });
+            }
         }
     }
 
-    if let Some(group) = compact_group {
-        print_compact_group(group);
+    if let Some(finished) = group {
+        print_group(&finished);
     }
 
     eprintln!("pc-scan: summary");
@@ -293,11 +293,16 @@ fn print_detailed(n: usize, classification: &Classification) {
     }
 }
 
-fn print_compact_group(group: CompactGroup) {
-    if group.start == group.end {
-        println!("{}\t{}", group.start, group.status,);
+fn print_group(group: &Group) {
+    let range = if group.start == group.end {
+        group.start.to_string()
     } else {
-        println!("{}..{}\t{}", group.start, group.end, group.status,);
+        format!("{}..{}", group.start, group.end)
+    };
+
+    match &group.reason {
+        Some(reason) => println!("{range}\t{}\t{reason}", group.status),
+        None => println!("{range}\t{}", group.status),
     }
 }
 
@@ -316,7 +321,7 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
         }
     }
 
-    let mut compact = false;
+    let mut mode = OutputMode::Detailed;
     let mut max_graph_n = usize::MAX;
     let mut max_graph_n_seen = false;
     let mut positional = Vec::<&str>::new();
@@ -325,14 +330,25 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
     for argument in arguments {
         if !options_finished {
             match argument.as_str() {
-                "--compact" => {
-                    if compact {
-                        return Err(ScanCliError::DuplicateOption {
-                            option: "--compact",
+                "--compact" | "--bands" => {
+                    let (requested, option) = if argument == "--compact" {
+                        (OutputMode::Compact, "--compact")
+                    } else {
+                        (OutputMode::Bands, "--bands")
+                    };
+
+                    if mode == requested {
+                        return Err(ScanCliError::DuplicateOption { option });
+                    }
+
+                    if mode != OutputMode::Detailed {
+                        return Err(ScanCliError::ConflictingOptions {
+                            first: "--compact",
+                            second: "--bands",
                         });
                     }
 
-                    compact = true;
+                    mode = requested;
                     continue;
                 }
 
@@ -412,7 +428,7 @@ fn parse_arguments(arguments: &[String]) -> Result<Command, ScanCliError> {
         k,
         start,
         end,
-        compact,
+        mode,
         max_graph_n,
     }))
 }
@@ -464,6 +480,8 @@ fn print_help() {
          \n\
          Options:\n\
            --compact            group consecutive equal statuses into ranges\n\
+           --bands              group consecutive equal statuses and reasons\n\
+                                into ranges: the lower-bound certificate\n\
            --max-graph-n=N      never build a graph beyond n = N\n\
            --quick-only         never build a graph at all\n\
            -h, --help           show this help\n\
@@ -511,11 +529,41 @@ struct Classification {
     graph_built: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct CompactGroup {
+/// Consecutive values of `n` printed as one range.
+#[derive(Clone, Debug)]
+struct Group {
     start: usize,
     end: usize,
     status: ScanStatus,
+    reason: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OutputMode {
+    /// One record per `n`.
+    Detailed,
+
+    /// Consecutive equal verdicts grouped into ranges.
+    Compact,
+
+    /// Consecutive equal verdicts and reasons grouped into ranges.
+    ///
+    /// A degree obstruction persists as `n` grows, until the offending
+    /// vertex gains a neighbour, so a band records one vertex and one degree
+    /// for a whole range. This is the lower-bound certificate format.
+    Bands,
+}
+
+impl fmt::Display for OutputMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Detailed => write!(f, "detailed"),
+
+            Self::Compact => write!(f, "compact"),
+
+            Self::Bands => write!(f, "bands"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -534,7 +582,7 @@ struct ScanOptions {
     k: u32,
     start: usize,
     end: usize,
-    compact: bool,
+    mode: OutputMode,
 
     /// Largest `n` for which a graph may be constructed.
     ///
@@ -555,19 +603,40 @@ enum Command {
 enum ScanCliError {
     Usage,
 
-    UnknownOption { value: String },
+    UnknownOption {
+        value: String,
+    },
 
-    DuplicateOption { option: &'static str },
+    DuplicateOption {
+        option: &'static str,
+    },
 
-    InvalidExponent { value: String },
+    ConflictingOptions {
+        first: &'static str,
+        second: &'static str,
+    },
 
-    ExponentTooSmall { k: u32 },
+    InvalidExponent {
+        value: String,
+    },
 
-    InvalidVertexCount { name: &'static str, value: String },
+    ExponentTooSmall {
+        k: u32,
+    },
 
-    ZeroVertexCount { name: &'static str },
+    InvalidVertexCount {
+        name: &'static str,
+        value: String,
+    },
 
-    DescendingInterval { start: usize, end: usize },
+    ZeroVertexCount {
+        name: &'static str,
+    },
+
+    DescendingInterval {
+        start: usize,
+        end: usize,
+    },
 }
 
 impl fmt::Display for ScanCliError {
@@ -576,7 +645,7 @@ impl fmt::Display for ScanCliError {
             Self::Usage => {
                 write!(
                     f,
-                    "usage: pc-scan [--compact] <k> <n> | pc-scan [--compact] <k> <start> <end>"
+                    "usage: pc-scan [OPTIONS] <k> <n> | pc-scan [OPTIONS] <k> <start> <end>"
                 )
             }
 
@@ -586,6 +655,10 @@ impl fmt::Display for ScanCliError {
 
             Self::DuplicateOption { option } => {
                 write!(f, "option {option} specified more than once")
+            }
+
+            Self::ConflictingOptions { first, second } => {
+                write!(f, "options {first} and {second} cannot be combined")
             }
 
             Self::InvalidExponent { value } => {
@@ -627,7 +700,7 @@ mod tests {
                 k: 5,
                 start: 246_877,
                 end: 246_877,
-                compact: false,
+                mode: OutputMode::Detailed,
                 max_graph_n: usize::MAX,
             })
         );
@@ -641,7 +714,7 @@ mod tests {
                 k: 7,
                 start: 1,
                 end: 10,
-                compact: false,
+                mode: OutputMode::Detailed,
                 max_graph_n: 0,
             })
         );
@@ -652,7 +725,7 @@ mod tests {
                 k: 5,
                 start: 1,
                 end: 10,
-                compact: false,
+                mode: OutputMode::Detailed,
                 max_graph_n: 1_000,
             })
         );
@@ -674,10 +747,34 @@ mod tests {
                 k: 5,
                 start: 246_876,
                 end: 246_878,
-                compact: true,
+                mode: OutputMode::Compact,
                 max_graph_n: usize::MAX,
             })
         );
+    }
+
+    #[test]
+    fn parses_bands_mode_and_rejects_mixing_it_with_compact() {
+        assert_eq!(
+            parse_arguments(&strings(&["--bands", "--quick-only", "4", "1", "9640"])).unwrap(),
+            Command::Scan(ScanOptions {
+                k: 4,
+                start: 1,
+                end: 9_640,
+                mode: OutputMode::Bands,
+                max_graph_n: 0,
+            })
+        );
+
+        assert!(matches!(
+            parse_arguments(&strings(&["--bands", "--compact", "4", "1", "10"])),
+            Err(ScanCliError::ConflictingOptions { .. })
+        ));
+
+        assert!(matches!(
+            parse_arguments(&strings(&["--bands", "--bands", "4", "1", "10"])),
+            Err(ScanCliError::DuplicateOption { option: "--bands" })
+        ));
     }
 
     #[test]

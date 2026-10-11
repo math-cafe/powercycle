@@ -36,9 +36,16 @@ Un bundle revendiquant un `n` minimal porte les **deux moitiés** de l'énoncé.
 cyclique. Il est exporté sous forme canonique : rotation plaçant le sommet `1`
 en premier, orientation plaçant le plus petit voisin de `1` en second.
 
-**La borne inférieure** est `scan.txt`, la sortie de `pc-scan` sur `1..n`. Elle
-consigne, pour chaque valeur inférieure, un sommet de degré au plus un —
-qu'aucun cycle hamiltonien ne peut emprunter.
+**La borne inférieure** est `bands.txt`, la sortie de `pc-scan --bands` sur
+`1..n-1`. Elle découpe toutes les valeurs inférieures en bandes, chacune nommant
+un sommet de degré au plus un — qu'aucun cycle hamiltonien ne peut emprunter —
+sur toute sa plage. Une douzaine de lignes couvrent des millions de valeurs, car
+le degré d'un sommet ne décroît jamais quand `n` augmente : égal aux deux bouts
+d'une bande, il l'est partout entre les deux.
+
+Jusqu'à la version 0.1.0, la borne inférieure était `scan.txt`, une ligne par
+`n`. Sa taille croissait linéairement avec `n` — 33 Go à `k = 7` — et il reste
+disponible aux tags `witness-k*`.
 
 `final.pcdump.json` n'est que de la provenance. Le certificat mathématique est
 le cycle brut.
@@ -99,3 +106,20 @@ ne prennent que `k`, `n` et une liste candidate, et vérifient que c'est une
 permutation de `1..n` dont les sommes consécutives, fermeture comprise, sont des
 puissances `k`-ièmes parfaites. Aucun ne lit de dump, d'identifiant d'arête,
 d'historique de patch ni quoi que ce soit du solveur.
+
+Pour un bundle qui revendique la minimalité, la borne inférieure :
+
+```console
+xz -dc witness/k$K-n$N/bands.txt.xz > /tmp/powercycle-bands.txt
+sha256sum /tmp/powercycle-bands.txt          # doit correspondre à bands.txt.sha256
+
+cargo run --release --manifest-path src/verify/rust/Cargo.toml \
+  --bin powercycle-verify-bands -- $K $N /tmp/powercycle-bands.txt
+
+python src/verify/python/verify-bands.py $K $N /tmp/powercycle-bands.txt
+```
+
+Ces deux-là vérifient que les bandes couvrent `1..n-1` sans trou et, aux deux
+bouts de chaque bande, recomptent les puissances dans la fenêtre de son sommet
+pour confirmer le degré annoncé. Comme les vérificateurs de cycle, ils
+n'utilisent que `k`, `n` et le fichier.

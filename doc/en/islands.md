@@ -244,7 +244,8 @@ cannot replay.
 
 `n` outside `I_k` is proof of non-Hamiltonicity, and the certificate is four
 integers: the interval, the offending vertex, and the two powers bracketing its
-window.
+window. A bundle's `bands.txt` is that certificate for every value below its
+`n`, one band per line, the two powers left for the verifier to recount.
 
 `n` inside `I_k` proves nothing. The degree condition is necessary, never
 sufficient. **`k = 2` is the standing counterexample**: `I_2` starts at 31, and

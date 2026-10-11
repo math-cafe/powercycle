@@ -6,8 +6,9 @@
 #   ./scripts/check.fish [--quick]
 #
 # Runs the code checks, then re-derives every published claim from the
-# committed witness bundles: checksums, both independent verifiers, and a
-# byte-for-byte replay of each lower-bound certificate. Then it builds a
+# committed witness bundles: checksums, both independent verifiers of each
+# cycle and of each lower-bound certificate, and a byte-for-byte replay of the
+# certificate by pc-scan. Then it builds a
 # throwaway bundle, and checks scripts/islands-chain.py against pc-scan.
 #
 # --quick skips the ignored long-running cross-checks in the test suite.
@@ -103,7 +104,7 @@ for bundle in $project_root/witness/k*-n*/
     # Every artifact must match the checksum of its uncompressed form.
     set -l artifact_failed 0
 
-    for artifact in cycle.txt scan.txt final.pcdump.json
+    for artifact in cycle.txt bands.txt final.pcdump.json
         if not test -f "$bundle/$artifact.xz"
             continue
         end
@@ -138,12 +139,26 @@ for bundle in $project_root/witness/k*-n*/
         record_failure "$name python verifier"
     end
 
-    # A bundle claiming minimality must reproduce its lower-bound certificate.
-    if test -f "$bundle/scan.txt.xz"
-        if ./target/release/pc-scan $k 1 $n 2>/dev/null | diff -q - "$work/scan.txt" >/dev/null
-            echo "    lower bound: scan replayed identically"
+    # A bundle claiming minimality carries a lower-bound certificate: checked
+    # twice by tools outside the dependency graph, then replayed by pc-scan.
+    if test -f "$bundle/bands.txt.xz"
+        if ./src/verify/rust/target/release/powercycle-verify-bands $k $n "$work/bands.txt" >/dev/null
+            echo "    lower bound, rust verifier: VALID"
         else
-            record_failure "$name scan replay"
+            record_failure "$name rust bands verifier"
+        end
+
+        if python3 src/verify/python/verify-bands.py $k $n "$work/bands.txt" >/dev/null
+            echo "    lower bound, python verifier: VALID"
+        else
+            record_failure "$name python bands verifier"
+        end
+
+        if ./target/release/pc-scan --bands --quick-only $k 1 (math $n - 1) 2>/dev/null \
+                | diff -q - "$work/bands.txt" >/dev/null
+            echo "    lower bound: bands replayed identically"
+        else
+            record_failure "$name bands replay"
         end
     else
         echo "    lower bound: no certificate in this bundle"
@@ -174,12 +189,12 @@ else
         ./target/release/pc-export $probe_dumps[1] \
             >"$work/probe-cycle.txt" 2>/dev/null
 
-        ./target/release/pc-scan $probe_k 1 $probe_n \
-            >"$work/probe-scan.txt" 2>/dev/null
+        ./target/release/pc-scan --bands --quick-only $probe_k 1 (math $probe_n - 1) \
+            >"$work/probe-bands.txt" 2>/dev/null
 
         if fish "$project_root/scripts/prepare-witness.fish" \
                 $probe_k $probe_n "$work/probe-cycle.txt" \
-                $probe_dumps[1] "$work/probe-scan.txt" >/dev/null
+                $probe_dumps[1] "$work/probe-bands.txt" >/dev/null
             echo "    built"
         else
             record_failure "bundle construction: prepare-witness failed"
@@ -232,7 +247,7 @@ else
         # Re-running on an existing bundle must verify, never overwrite.
         if fish "$project_root/scripts/prepare-witness.fish" \
                 $probe_k $probe_n "$work/probe-cycle.txt" \
-                $probe_dumps[1] "$work/probe-scan.txt" >/dev/null
+                $probe_dumps[1] "$work/probe-bands.txt" >/dev/null
             echo "    re-run verifies existing checksums"
         else
             record_failure "bundle construction: not idempotent"

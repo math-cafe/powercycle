@@ -161,13 +161,17 @@ rules `G_k(n)` out. Each `n` is first tested with the graph-free degree check;
 only the survivors pay for a graph construction and the full preflight.
 
 ```console
-pc-scan [--compact] [--max-graph-n=N | --quick-only] <k> <start> <end>
+pc-scan [--compact | --bands] [--max-graph-n=N | --quick-only] <k> <start> <end>
 ```
+
+`--compact` groups consecutive equal verdicts into ranges. `--bands` also keeps
+the reason, so each range names one obstruction that holds throughout it; over
+`1 .. n-1` with `--quick-only` this is the lower-bound certificate of a bundle.
 
 `--max-graph-n` and `--quick-only` bound the graph construction. Beyond the
 bound the verdict is `UNCHECKED` rather than `CANDIDATE`, because the full
-preflight did not run. An unguarded scan never reports `UNCHECKED`, so the
-published certificates are unaffected.
+preflight did not run. The published certificates stop at `n - 1` and contain
+only degree rejections, which never need a graph.
 
 A `CANDIDATE` verdict means no implemented obstruction was found. It does not
 prove that a Hamiltonian cycle exists.
@@ -218,13 +222,18 @@ Verification is intentionally outside the powercycle dependency graph.
 ```text
 src/verify/
 ├── rust/
+│   └── src/
+│       ├── main.rs                          powercycle-verify, the cycle
+│       └── bin/powercycle-verify-bands.rs   the lower-bound certificate
 └── python/
+    ├── verify-cycle.py
+    └── verify-bands.py
 ```
 
-The Rust verifier is its own Cargo project and is excluded from the main
-workspace.
+The Rust verifiers are their own Cargo project and are excluded from the main
+workspace. `powercycle-verify` is its default binary.
 
-The Python verifier uses only the Python standard library.
+The Python verifiers use only the Python standard library.
 
 Neither verifier depends on powercycle libraries or reads powercycle dumps.
 A verifier receives only `k`, `n` and a candidate witness, then checks:
@@ -233,6 +242,16 @@ A verifier receives only `k`, `n` and a candidate witness, then checks:
 2. every consecutive sum is a perfect `k`-th power;
 3. the closing sum between the last and first vertices is also a perfect
    `k`-th power.
+
+A certificate verifier receives `k`, `n` and the bands, then checks:
+
+1. the bands cover `1..n-1` in order, without gap or overlap;
+2. each band's vertex exists in every graph of its range;
+3. at both ends of each band, counting the `k`-th powers in the window of that
+   vertex gives the claimed degree, at most one.
+
+The degree never decreases as `n` grows, so the two ends settle every value in
+between.
 
 ## 6. Configuration and path resolution
 
@@ -340,8 +359,8 @@ witness/k5-n246877/
 ├── README.fr.md
 ├── cycle.txt.xz              existence
 ├── cycle.txt.sha256
-├── scan.txt.xz               lower bound, when minimality is claimed
-├── scan.txt.sha256
+├── bands.txt.xz              lower bound, when minimality is claimed
+├── bands.txt.sha256
 ├── final.pcdump.json.xz      provenance
 └── final.pcdump.json.sha256
 ```
@@ -351,10 +370,17 @@ stored compressed next to the SHA-256 of its **uncompressed** form, so the
 checksum identifies the mathematical content rather than a particular
 compression.
 
-A bundle that claims a minimal `n` carries a second certificate. `scan.txt` is
-the `pc-scan` output over `1 .. n`, which records the obstruction found at every
-smaller value. Existence and minimality are then both reproducible from the
-bundle alone.
+A bundle that claims a minimal `n` carries a second certificate. `bands.txt` is
+the `pc-scan --bands --quick-only` output over `1 .. n-1`: a few bands, each
+naming a vertex of degree at most one throughout its range. The degree of a
+vertex never decreases as `n` grows, so a band is checked at its two ends.
+`src/verify/` holds two independent checkers for it, next to the two cycle
+verifiers. Existence and minimality are then both reproducible from the bundle
+alone.
+
+Up to version 0.1.0 the certificate was `scan.txt`, the per-`n` output over
+`1 .. n`. It grows linearly with `n`, 33 GB at `k = 7`, and is kept at the
+`witness-k*` tags.
 
 Bundles are built by `scripts/prepare-witness.fish`, which verifies any
 checksum already present rather than overwriting it silently.
@@ -384,13 +410,15 @@ one invites being re-derived.
 
 `scripts/check.fish` runs formatting, lints, the test suite, the long
 cross-checks and a release build, then re-derives every claim in `witness/`:
-checksums, both independent verifiers, and a byte-for-byte replay of each
-lower-bound certificate.
+checksums, both independent verifiers of each cycle and of each lower-bound
+certificate, and a byte-for-byte replay of the certificate by `pc-scan`.
 
 Verifying committed bundles never runs `prepare-witness.fish`, so the check
 ends by building a throwaway bundle for `k = 2`, asserting it lands under
 `witness/` and nowhere else, verifying it, confirming that a second run checks
-the checksums rather than rewriting them, and removing it.
+the checksums rather than rewriting them, and removing it. Last, it compares
+`scripts/islands-chain.py` with `pc-scan` for `k = 2..5`, every `n` up to the
+final island.
 
 It is the single command to run before publishing a result.
 
