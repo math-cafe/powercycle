@@ -73,7 +73,8 @@ powercycle/
 │   │       ├── pc-scan.rs
 │   │       ├── pc-search.rs
 │   │       ├── pc-patch.rs
-│   │       └── pc-export.rs
+│   │       ├── pc-export.rs
+│   │       └── pc-tsplib.rs
 │   │
 │   └── verify/
 │       ├── rust/
@@ -214,6 +215,24 @@ Refuses any dump whose factor is not a single cycle.
 ```console
 pc-export <dump.pcdump.json>
 ```
+
+### `pc-tsplib`
+
+The bridge to LKH-3, an external Lin-Kernighan solver, as an alternative to
+`pc-search`. `export` runs the preflight and writes `G_k(n)` as a TSPLIB
+Hamiltonian cycle problem: forced edges fixed, forbidden ones removed, with an
+LKH parameter file next to it. `tour` checks that the tour LKH returns is a
+Hamiltonian cycle of `G_k(n)`, without building the graph, and writes it in the
+same canonical order as `pc-export`, which `powercycle-core` provides to both.
+
+```console
+pc-tsplib export <k> <n> <out.hcp>
+LKH <out>.par                                 # from the directory of <out>
+pc-tsplib tour <k> <n> <out>.tour > cycle.txt
+```
+
+LKH is not a dependency of the repository; see section 7 of
+[`performance.md`](performance.md) for the measurements and the parameters.
 
 ## 5. Independent verification
 

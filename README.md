@@ -67,6 +67,7 @@ cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 | diff - /t
 | `pc-search` | SAT-based 2-factor search with subtour elimination and in-place repair |
 | `pc-patch` | pushes a stored dump further, outside the run that produced it |
 | `pc-export` | extracts a canonical witness from a one-cycle dump |
+| `pc-tsplib` | exports `G_k(n)` for the LKH-3 solver and turns its tour into a canonical witness |
 
 Typical use:
 

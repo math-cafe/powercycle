@@ -19,6 +19,7 @@ fn stdout_of(output: &Output) -> &str {
 
 const PC_SCAN: &str = env!("CARGO_BIN_EXE_pc-scan");
 const PC_EXPORT: &str = env!("CARGO_BIN_EXE_pc-export");
+const PC_TSPLIB: &str = env!("CARGO_BIN_EXE_pc-tsplib");
 
 #[test]
 fn scan_emits_one_tab_separated_record_per_n() {
@@ -247,4 +248,108 @@ fn export_rejects_a_missing_dump() {
 
     assert!(!output.status.success());
     assert!(stdout_of(&output).is_empty());
+}
+
+/// A fresh directory for one test, removed by the test itself.
+fn scratch_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("pc-tsplib-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch directory must be creatable");
+    dir
+}
+
+/// The unique Hamiltonian cycle of `G_2(32)`, in canonical order.
+const G2_32_CYCLE: [usize; 32] = [
+    1, 8, 28, 21, 4, 32, 17, 19, 30, 6, 3, 13, 12, 24, 25, 11, 5, 31, 18, 7, 29, 20, 16, 9, 27, 22,
+    14, 2, 23, 26, 10, 15,
+];
+
+fn write_tour(path: &std::path::Path, nodes: &[usize]) {
+    let mut text = format!("TYPE : TOUR\nDIMENSION : {}\nTOUR_SECTION\n", nodes.len());
+
+    for node in nodes {
+        text.push_str(&format!("{node}\n"));
+    }
+
+    text.push_str("-1\nEOF\n");
+    std::fs::write(path, text).expect("tour file must be writable");
+}
+
+#[test]
+fn tsplib_export_fixes_forced_edges_and_drops_forbidden_ones() {
+    let dir = scratch_dir("export");
+    let problem = dir.join("g2-32.hcp");
+
+    let output = run(PC_TSPLIB, &["export", "2", "32", problem.to_str().unwrap()]);
+    assert!(output.status.success());
+
+    let text = std::fs::read_to_string(&problem).unwrap();
+    let section = |name: &str| -> usize {
+        text.split(&format!("{name}\n"))
+            .nth(1)
+            .and_then(|rest| rest.split("-1\n").next())
+            .map_or(0, |body| body.lines().count())
+    };
+
+    assert!(text.contains("TYPE : HCP\n") && text.contains("DIMENSION : 32\n"));
+
+    // G_2(32) has 46 edges; propagation forces 23 and forbids 4.
+    assert_eq!(section("EDGE_DATA_SECTION"), 42);
+    assert_eq!(section("FIXED_EDGES_SECTION"), 23);
+    assert!(text.ends_with("-1\nEOF\n"));
+
+    let parameters = std::fs::read_to_string(dir.join("g2-32.par")).unwrap();
+    assert!(parameters.contains("PROBLEM_FILE = g2-32.hcp\n"));
+    assert!(parameters.contains("SUBGRADIENT = NO\n"));
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn tsplib_export_refuses_a_graph_the_preflight_rules_out() {
+    let dir = scratch_dir("refuse");
+    let problem = dir.join("g2-30.hcp");
+
+    let output = run(PC_TSPLIB, &["export", "2", "30", problem.to_str().unwrap()]);
+
+    assert!(!output.status.success());
+    assert!(!problem.exists());
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn tsplib_tour_writes_the_canonical_witness() {
+    let dir = scratch_dir("tour");
+    let tour = dir.join("g2-32.tour");
+
+    // Rotated and reversed, as LKH may return it.
+    let mut nodes = G2_32_CYCLE.to_vec();
+    nodes.rotate_left(11);
+    nodes.reverse();
+    write_tour(&tour, &nodes);
+
+    let output = run(PC_TSPLIB, &["tour", "2", "32", tour.to_str().unwrap()]);
+    assert!(output.status.success());
+
+    let expected: String = G2_32_CYCLE.iter().map(|v| format!("{v}\n")).collect();
+    assert_eq!(stdout_of(&output), expected);
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn tsplib_tour_rejects_a_tour_through_a_non_edge() {
+    let dir = scratch_dir("non-edge");
+    let tour = dir.join("g2-32.tour");
+
+    // A permutation of 1..=32, but 1 + 2 = 3 is not a square.
+    write_tour(&tour, &(1..=32).collect::<Vec<_>>());
+
+    let output = run(PC_TSPLIB, &["tour", "2", "32", tour.to_str().unwrap()]);
+
+    assert!(!output.status.success());
+    assert!(stdout_of(&output).is_empty());
+
+    std::fs::remove_dir_all(dir).unwrap();
 }

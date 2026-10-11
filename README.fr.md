@@ -69,6 +69,7 @@ cargo run --release --bin pc-scan -- --bands --quick-only 5 1 246876 | diff - /t
 | `pc-search` | recherche SAT de 2-facteurs, avec élimination de sous-tours et réparation en place |
 | `pc-patch` | pousse plus loin un dump stocké, hors du run qui l'a produit |
 | `pc-export` | extrait un témoin canonique d'un dump à cycle unique |
+| `pc-tsplib` | exporte `G_k(n)` pour le solveur LKH-3 et convertit sa tournée en témoin canonique |
 
 Usage typique :
 

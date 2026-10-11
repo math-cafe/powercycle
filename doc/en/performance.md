@@ -445,10 +445,11 @@ not something its reputation settles.
 
 **Setup.** LKH-3.0.14, built from source with its own Makefile. `G_k(n)` is
 exported after the preflight: the edges degree-two propagation forces go to
-`FIXED_EDGES_SECTION`, the ones it forbids are left out. The exporter is a
-throwaway program over `PowerGraph` and `hamiltonian_preflight`, not yet in
-the repository; at `k = 6` it runs in 11 s with a 1.5 GB peak and writes a
-552 MB problem. Parameters:
+`FIXED_EDGES_SECTION`, the ones it forbids are left out. `pc-tsplib export`
+does this; at `k = 6` it runs in 11 s with a 1.5 GB peak and writes a 552 MB
+problem, and `pc-tsplib tour` turns the tour LKH returns into a checked,
+canonical `cycle.txt`. Parameters, which `pc-tsplib` writes next to the
+problem:
 
 ```text
 SUBGRADIENT = NO
@@ -504,5 +505,6 @@ undetected. How many edges the rule would add at `k = 5` and `k = 6` has not
 been measured.
 
 **Verdict: open.** Two instances, one run each, and a 40-fold gain where the
-pipeline is slowest. Not integrated: no repository tooling drives LKH yet, and
-it would not change the `k = 7` picture without a machine several times larger.
+pipeline is slowest. `pc-tsplib` makes it reproducible, but `pc-search`
+remains the default: LKH is an external program, and it would not change the
+`k = 7` picture without a machine several times larger.

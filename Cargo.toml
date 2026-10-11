@@ -29,6 +29,10 @@ path = "src/powercycle/bin/pc-export.rs"
 name = "pc-scan"
 path = "src/powercycle/bin/pc-scan.rs"
 
+[[bin]]
+name = "pc-tsplib"
+path = "src/powercycle/bin/pc-tsplib.rs"
+
 [workspace]
 resolver = "3"
 members = [
