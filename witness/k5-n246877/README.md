@@ -63,6 +63,12 @@ Here the two halves happen to meet, because a witness exists at the first `n` th
 degree bound allows. That coincidence is what makes `n_min(5) = 246877` a
 theorem rather than a bound.
 
+## Prior work
+
+`n_min(5) = 246877` is, as far as is known, new. It extends OEIS [A115418](https://oeis.org/A115418), which
+lists `n_min(k)` for `k = 1 .. 4` (Roberto Tauraso, 2006; the cubic case is due
+to Giovanni Resta).
+
 ## Canonical witness identity
 
 The uncompressed `cycle.txt` has SHA-256:

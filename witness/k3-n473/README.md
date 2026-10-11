@@ -44,6 +44,14 @@ cannot settle `n_min` for every exponent. See
 and for the `k = 2` case, where the analogous bound is `31` while the true
 minimum is `32`.
 
+## Prior work
+
+`n_min(3) = 473` is not new. Giovanni Resta found the cubic loop of length 473
+(Carlos Rivera, [Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm): Sum to a cube), and the value is a(3) of OEIS [A115418](https://oeis.org/A115418),
+submitted by Roberto Tauraso in 2006. This bundle contributes an independently
+found and verified cycle, and the lower-bound certificate, for which no
+published counterpart has been found.
+
 ## Checksums
 
 Of the **uncompressed** artifacts:

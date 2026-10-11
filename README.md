@@ -13,17 +13,23 @@ perfect `k`-th power**. For `k = 2` this is the classical square-sum problem.
 
 ## Results
 
-| k | n_min | closed form | witness |
-|---|---|---|---|
-| 2 | 32 | — | known result ([A272259](https://oeis.org/A272259)) |
-| 3 | **473** | `9^3 - 8^3/2` | [`witness/k3-n473/`](witness/k3-n473/) |
-| 4 | **9641** | `11^4 - 10^4/2` | [`witness/k4-n9641/`](witness/k4-n9641/) |
-| 5 | **246877** | `13^5 - 12^5/2` | [`witness/k5-n246877/`](witness/k5-n246877/) |
-| 6 | **15748961** | `17^6 - 16^6/2` | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | open |
+| k | n_min | closed form | first found | witness |
+|---|---|---|---|---|
+| 2 | 32 | — | classical ([A071984](https://oeis.org/A071984), [A272259](https://oeis.org/A272259)) | not included |
+| 3 | **473** | `9^3 - 8^3/2` | G. Resta, c. 2005 ([Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm)); [A115418](https://oeis.org/A115418) | [`witness/k3-n473/`](witness/k3-n473/) |
+| 4 | **9641** | `11^4 - 10^4/2` | [A115418](https://oeis.org/A115418), R. Tauraso, 2006 | [`witness/k4-n9641/`](witness/k4-n9641/) |
+| 5 | **246877** | `13^5 - 12^5/2` | **this project** | [`witness/k5-n246877/`](witness/k5-n246877/) |
+| 6 | **15748961** | `17^6 - 16^6/2` | **this project** | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | open |
 
 Each value in bold is a theorem, not a bound: the bundle carries a Hamiltonian
-cycle **and** a certificate ruling out every smaller `n`. See
+cycle **and** a certificate ruling out every smaller `n`.
+
+The values for `k = 3` and `k = 4` were known before this project: Giovanni
+Resta found the cubic loop of length 473, and both values are terms of OEIS
+[A115418](https://oeis.org/A115418), submitted by Roberto Tauraso in 2006. No published proof of their
+minimality has been found; the bundles supply one. `k = 5` and `k = 6` are, as
+far as is known, new: [A115418](https://oeis.org/A115418) stops at `k = 4`. See
 [`witness/README.md`](witness/README.md) for the argument and its limits — in
 particular why `k = 2` does not follow the same pattern.
 

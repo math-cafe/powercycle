@@ -112,7 +112,12 @@ than only on vertex 5 — confirms that `G_2(31)` has **exactly two 2-factors**,
 both with two cycles. There is nothing else to check.
 
 `a(2) = 32` follows: the degree bound allows 31, the enumeration rules it out,
-and a witness exists at 32.
+and a witness exists at 32. None of this is new as a fact: `32` is the classical
+answer to the square-sum problem, and Bert Dobbelaere noted in OEIS
+[A071984](https://oeis.org/A071984) (2018) both the degree argument for
+`n <= 30` and that `n = 31` can be ruled out by hand. What this section adds is
+the argument written as a certificate: two branches, each closing on two
+cycles.
 
 ---
 

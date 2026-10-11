@@ -11,21 +11,29 @@ cycle.
 
 ## Results
 
-| k | n_min | closed form | bundle |
-|---|---|---|---|
-| 2 | 32 | — | not included; known result, see below |
-| 3 | **473** | `9^3 - 8^3/2` | [`k3-n473/`](k3-n473/) |
-| 4 | **9641** | `11^4 - 10^4/2` | [`k4-n9641/`](k4-n9641/) |
-| 5 | **246877** | `13^5 - 12^5/2` | [`k5-n246877/`](k5-n246877/) |
-| 6 | **15748961** | `17^6 - 16^6/2` | [`k6-n15748961/`](k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | no witness yet |
+| k | n_min | closed form | first found | bundle |
+|---|---|---|---|---|
+| 2 | 32 | — | classical | not included; see below |
+| 3 | **473** | `9^3 - 8^3/2` | G. Resta, c. 2005 | [`k3-n473/`](k3-n473/) |
+| 4 | **9641** | `11^4 - 10^4/2` | R. Tauraso, 2006 | [`k4-n9641/`](k4-n9641/) |
+| 5 | **246877** | `13^5 - 12^5/2` | this project | [`k5-n246877/`](k5-n246877/) |
+| 6 | **15748961** | `17^6 - 16^6/2` | this project | [`k6-n15748961/`](k6-n15748961/) |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | no witness yet |
 
 [`k5-n490463/`](k5-n490463/) holds an earlier, non-minimal witness for `k = 5`.
 It remains valid and independently verified, and records how the search
 progressed.
 
 For `k = 2` the answer is the classical square-sum problem and is already known;
-see OEIS [A272259](https://oeis.org/A272259), whose rows start at `n = 32`.
+see OEIS [A071984](https://oeis.org/A071984) and
+[A272259](https://oeis.org/A272259), whose rows start at `n = 32`.
+
+The sequence `n_min(k)` is OEIS [A115418](https://oeis.org/A115418), submitted by Roberto Tauraso in 2006
+with the terms 2, 32, 473, 9641. The cubic loop of length 473 is due to Giovanni
+Resta, who reduced the search to a travelling salesman problem (Carlos Rivera,
+[Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm): Sum to a cube). No published proof that 473 and 9641 are minimal has been
+found; the `k3` and `k4` bundles supply one. `246877` and `15748961` extend the
+sequence and are, as far as is known, new.
 
 ## What a bundle contains
 

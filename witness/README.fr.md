@@ -11,22 +11,30 @@ pour lequel `G_k(n)` possède un cycle hamiltonien.
 
 ## Résultats
 
-| k | n_min | forme close | bundle |
-|---|---|---|---|
-| 2 | 32 | — | non inclus ; résultat connu, voir ci-dessous |
-| 3 | **473** | `9^3 - 8^3/2` | [`k3-n473/`](k3-n473/) |
-| 4 | **9641** | `11^4 - 10^4/2` | [`k4-n9641/`](k4-n9641/) |
-| 5 | **246877** | `13^5 - 12^5/2` | [`k5-n246877/`](k5-n246877/) |
-| 6 | **15748961** | `17^6 - 16^6/2` | [`k6-n15748961/`](k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | pas encore de témoin |
+| k | n_min | forme close | trouvé par | bundle |
+|---|---|---|---|---|
+| 2 | 32 | — | classique | non inclus ; voir ci-dessous |
+| 3 | **473** | `9^3 - 8^3/2` | G. Resta, vers 2005 | [`k3-n473/`](k3-n473/) |
+| 4 | **9641** | `11^4 - 10^4/2` | R. Tauraso, 2006 | [`k4-n9641/`](k4-n9641/) |
+| 5 | **246877** | `13^5 - 12^5/2` | ce projet | [`k5-n246877/`](k5-n246877/) |
+| 6 | **15748961** | `17^6 - 16^6/2` | ce projet | [`k6-n15748961/`](k6-n15748961/) |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | pas encore de témoin |
 
 [`k5-n490463/`](k5-n490463/) conserve un témoin antérieur, non minimal, pour
 `k = 5`. Il reste valide et vérifié de façon indépendante, et documente la
 progression de la recherche.
 
 Pour `k = 2`, la réponse relève du square-sum problem classique et est déjà
-connue ; voir l'OEIS [A272259](https://oeis.org/A272259), dont les lignes
-commencent à `n = 32`.
+connue ; voir l'OEIS [A071984](https://oeis.org/A071984) et
+[A272259](https://oeis.org/A272259), dont les lignes commencent à `n = 32`.
+
+La suite `n_min(k)` est l'OEIS [A115418](https://oeis.org/A115418), soumise par Roberto Tauraso en 2006 avec
+les termes 2, 32, 473, 9641. La boucle de cubes de longueur 473 est due à
+Giovanni Resta, qui a ramené la recherche à un problème du voyageur de commerce
+(Carlos Rivera, [Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm) : Sum to a cube). Aucune preuve publiée de la minimalité de
+473 et 9641 n'a été trouvée ; les bundles `k3` et `k4` en fournissent une.
+`246877` et `15748961` prolongent la suite et sont, à notre connaissance,
+nouveaux.
 
 ## Contenu d'un bundle
 

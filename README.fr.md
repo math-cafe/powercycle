@@ -14,17 +14,23 @@ c'est le square-sum problem classique.
 
 ## Résultats
 
-| k | n_min | forme close | témoin |
-|---|---|---|---|
-| 2 | 32 | — | résultat connu ([A272259](https://oeis.org/A272259)) |
-| 3 | **473** | `9^3 - 8^3/2` | [`witness/k3-n473/`](witness/k3-n473/) |
-| 4 | **9641** | `11^4 - 10^4/2` | [`witness/k4-n9641/`](witness/k4-n9641/) |
-| 5 | **246877** | `13^5 - 12^5/2` | [`witness/k5-n246877/`](witness/k5-n246877/) |
-| 6 | **15748961** | `17^6 - 16^6/2` | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | ouvert |
+| k | n_min | forme close | trouvé par | témoin |
+|---|---|---|---|---|
+| 2 | 32 | — | classique ([A071984](https://oeis.org/A071984), [A272259](https://oeis.org/A272259)) | non inclus |
+| 3 | **473** | `9^3 - 8^3/2` | G. Resta, vers 2005 ([Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm)) ; [A115418](https://oeis.org/A115418) | [`witness/k3-n473/`](witness/k3-n473/) |
+| 4 | **9641** | `11^4 - 10^4/2` | [A115418](https://oeis.org/A115418), R. Tauraso, 2006 | [`witness/k4-n9641/`](witness/k4-n9641/) |
+| 5 | **246877** | `13^5 - 12^5/2` | **ce projet** | [`witness/k5-n246877/`](witness/k5-n246877/) |
+| 6 | **15748961** | `17^6 - 16^6/2` | **ce projet** | [`witness/k6-n15748961/`](witness/k6-n15748961/) |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | ouvert |
 
 Chaque valeur en gras est un théorème, pas une borne : le bundle porte un cycle
-hamiltonien **et** un certificat écartant tout `n` plus petit. Voir
+hamiltonien **et** un certificat écartant tout `n` plus petit.
+
+Les valeurs pour `k = 3` et `k = 4` étaient connues avant ce projet : Giovanni
+Resta a trouvé la boucle de cubes de longueur 473, et les deux valeurs sont des
+termes de l'OEIS [A115418](https://oeis.org/A115418), soumise par Roberto Tauraso en 2006. Aucune preuve publiée
+de leur minimalité n'a été trouvée ; les bundles en fournissent une. `k = 5` et
+`k = 6` sont, à notre connaissance, nouveaux : [A115418](https://oeis.org/A115418) s'arrête à `k = 4`. Voir
 [`witness/README.fr.md`](witness/README.fr.md) pour l'argument et ses limites —
 en particulier pourquoi `k = 2` ne suit pas le même motif.
 

@@ -67,6 +67,12 @@ Ici les deux moitiés se rejoignent, parce qu'un témoin existe au premier `n` q
 la borne de degré autorise. C'est cette coïncidence qui fait de
 `n_min(5) = 246877` un théorème et non une simple borne.
 
+## Travaux antérieurs
+
+`n_min(5) = 246877` est, à notre connaissance, nouveau. Il prolonge l'OEIS [A115418](https://oeis.org/A115418),
+qui donne `n_min(k)` pour `k = 1 .. 4` (Roberto Tauraso, 2006 ; le cas des cubes
+est dû à Giovanni Resta).
+
 ## Identité canonique du témoin
 
 Le fichier `cycle.txt` non compressé a pour SHA-256 :

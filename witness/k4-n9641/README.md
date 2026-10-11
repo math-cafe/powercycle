@@ -44,6 +44,13 @@ cannot settle `n_min` for every exponent. See
 and for the `k = 2` case, where the analogous bound is `31` while the true
 minimum is `32`.
 
+## Prior work
+
+`n_min(4) = 9641` is not new: it is a(4) of OEIS [A115418](https://oeis.org/A115418), submitted by Roberto
+Tauraso in 2006. This bundle contributes an independently found and verified
+cycle, and the lower-bound certificate, for which no published counterpart has
+been found.
+
 ## Checksums
 
 Of the **uncompressed** artifacts:

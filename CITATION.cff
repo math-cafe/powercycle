@@ -36,3 +36,25 @@ references:
     notes: >-
       Establishes n_min(5) = 246877, together with the lower-bound certificate
       ruling out every smaller n.
+  - type: database
+    title: >-
+      A115418: shortest n-th-power loop, a circular permutation of 1..m whose
+      consecutive sums are perfect n-th powers
+    authors:
+      - family-names: Tauraso
+        given-names: Roberto
+    year: 2006
+    url: "https://oeis.org/A115418"
+    notes: >-
+      Lists n_min(k) for k = 1..4 (2, 32, 473, 9641). The values for k = 3 and
+      4 predate this repository, which certifies their minimality and adds
+      k = 5 and 6.
+  - type: website
+    title: "Puzzle 311: Sum to a cube"
+    authors:
+      - family-names: Rivera
+        given-names: Carlos
+    url: "http://www.primepuzzles.net/puzzles/puzz_311.htm"
+    notes: >-
+      Giovanni Resta's cubic loop of length 473, found by reduction to a
+      travelling salesman problem.

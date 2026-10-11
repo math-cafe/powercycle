@@ -44,6 +44,12 @@ The degree condition is necessary and **not** sufficient — see
 where the analogous bound is `31` while the true minimum is `32`. Here the two
 halves meet, because a witness exists at the first `n` the bound allows.
 
+## Prior work
+
+`n_min(6) = 15748961` is, as far as is known, new. It extends OEIS [A115418](https://oeis.org/A115418), which
+lists `n_min(k)` for `k = 1 .. 4` (Roberto Tauraso, 2006; the cubic case is due
+to Giovanni Resta).
+
 ## Checksums
 
 Of the **uncompressed** artifacts:

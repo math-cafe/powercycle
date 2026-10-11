@@ -44,6 +44,14 @@ peut donc pas trancher `n_min` pour tout exposant. Voir
 générale et pour le cas `k = 2`, où la borne analogue vaut `31` alors que le
 minimum réel est `32`.
 
+## Travaux antérieurs
+
+`n_min(3) = 473` n'est pas nouveau. Giovanni Resta a trouvé la boucle de cubes de
+longueur 473 (Carlos Rivera, [Puzzle 311](http://www.primepuzzles.net/puzzles/puzz_311.htm) : Sum to a cube), et la valeur est le terme
+a(3) de l'OEIS [A115418](https://oeis.org/A115418), soumise par Roberto Tauraso en 2006. Ce bundle apporte un
+cycle trouvé et vérifié de façon indépendante, ainsi que le certificat de borne
+inférieure, dont aucun équivalent publié n'a été trouvé.
+
 ## Checksums
 
 Des artefacts **non compressés** :

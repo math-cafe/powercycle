@@ -46,6 +46,12 @@ où la borne analogue vaut `31` alors que le minimum réel est `32`. Ici les deu
 moitiés se rejoignent, parce qu'un témoin existe au premier `n` que la borne
 autorise.
 
+## Travaux antérieurs
+
+`n_min(6) = 15748961` est, à notre connaissance, nouveau. Il prolonge l'OEIS
+[A115418](https://oeis.org/A115418), qui donne `n_min(k)` pour `k = 1 .. 4` (Roberto Tauraso, 2006 ; le cas des
+cubes est dû à Giovanni Resta).
+
 ## Checksums
 
 Des artefacts **non compressés** :
