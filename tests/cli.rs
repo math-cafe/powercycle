@@ -353,3 +353,66 @@ fn tsplib_tour_rejects_a_tour_through_a_non_edge() {
 
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn tsplib_contracted_export_round_trips_through_its_chains() {
+    let dir = scratch_dir("contract");
+    let problem = dir.join("g2-32.hcp");
+
+    let output = run(
+        PC_TSPLIB,
+        &["export", "--contract", "2", "32", problem.to_str().unwrap()],
+    );
+    assert!(output.status.success());
+
+    let text = std::fs::read_to_string(&problem).unwrap();
+    let chains = std::fs::read_to_string(dir.join("g2-32.chains")).unwrap();
+
+    // 23 forced edges in 7 chains leave 16 nodes.
+    assert!(text.contains("DIMENSION : 16\n"));
+    assert!(chains.starts_with("PC-TSPLIB CHAINS\nK : 2\nN : 32\nNODES : 16\n"));
+
+    // The interior vertices are the ones strictly inside a listed chain;
+    // the others are numbered in increasing order.
+    let mut interior = [false; 33];
+
+    for line in chains.lines().skip(5).take_while(|line| *line != "EOF") {
+        let chain: Vec<usize> = line.split(' ').map(|v| v.parse().unwrap()).collect();
+
+        for &v in &chain[1..chain.len() - 1] {
+            interior[v] = true;
+        }
+    }
+
+    let node_of = |vertex: usize| (1..=vertex).filter(|&v| !interior[v]).count();
+    let nodes: Vec<usize> = G2_32_CYCLE
+        .iter()
+        .filter(|&&v| !interior[v])
+        .map(|&v| node_of(v))
+        .collect();
+    assert_eq!(nodes.len(), 16);
+
+    let tour = dir.join("g2-32.tour");
+    write_tour(&tour, &nodes);
+
+    let expanded = run(
+        PC_TSPLIB,
+        &[
+            "tour",
+            "2",
+            "32",
+            tour.to_str().unwrap(),
+            dir.join("g2-32.chains").to_str().unwrap(),
+        ],
+    );
+    assert!(expanded.status.success());
+
+    let expected: String = G2_32_CYCLE.iter().map(|v| format!("{v}\n")).collect();
+    assert_eq!(stdout_of(&expanded), expected);
+
+    // Without the chains, the same tour is 16 vertices short.
+    let bare = run(PC_TSPLIB, &["tour", "2", "32", tour.to_str().unwrap()]);
+    assert!(!bare.status.success());
+
+    std::fs::remove_dir_all(dir).unwrap();
+}

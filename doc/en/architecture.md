@@ -226,10 +226,17 @@ Hamiltonian cycle of `G_k(n)`, without building the graph, and writes it in the
 same canonical order as `pc-export`, which `powercycle-core` provides to both.
 
 ```console
-pc-tsplib export <k> <n> <out.hcp>
+pc-tsplib export [--contract] <k> <n> <out.hcp>
 LKH <out>.par                                 # from the directory of <out>
-pc-tsplib tour <k> <n> <out>.tour > cycle.txt
+pc-tsplib tour <k> <n> <out>.tour [<out>.chains] > cycle.txt
 ```
+
+With `--contract`, each chain of forced edges becomes its two ends joined by
+one fixed edge, so LKH never stores the interior vertices, which have nothing
+left to choose; edges that would join the two ends of a chain are dropped. The
+chains go to `<out>.chains`, one per line, and `tour` puts each interior back
+between its ends before checking the cycle. Nodes are numbered in increasing
+vertex order, so the chains file alone rebuilds the numbering.
 
 LKH is not a dependency of the repository; see section 7 of
 [`performance.md`](performance.md) for the measurements and the parameters.

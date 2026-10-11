@@ -545,8 +545,24 @@ on the two-level build. Linear extrapolation to `n = 587 761 723` gives about
 LKH keeps every vertex, including the interior of the fixed chains, which have
 nothing left to choose. At `k = 6` the fixed edges form 2 821 104 chains with
 6 935 555 interior vertices; replacing each chain by its two ends joined by a
-fixed edge leaves 8 813 406 vertices, 56% of `n`, as an ordinary TSP. Not
-implemented.
+fixed edge leaves 8 813 406 vertices, 56% of `n`, as an ordinary TSP.
+`pc-tsplib export --contract` does this, drops the edges that would close a
+chain on itself — the rule propagation lacks, one or two per instance — and
+writes the chains to a file that `pc-tsplib tour` uses to put the interior
+back. Three-level build, one run each:
+
+| | nodes | uncontracted | contracted |
+|---|---|---|---|
+| `G_5(246877)` | 35% | 11 trials, 11.2 s | 4 trials, 2.8 s |
+| `G_5(490463)` | 63% | 1 trial, 8.3 s | 2 trials, 15.1 s |
+| `G_6(15748961)` | 56% | 2 trials, 727 s, **9.9 GB** | 1 trial, 351 s, **5.7 GB** |
+
+Memory falls with the node count, 58% of the uncontracted peak for 56% of the
+nodes, and the problem file from 552 MB to 307 MB plus a 106 MB chains file.
+Time per trial does not: 327 s contracted against 310 to 375 s uncontracted at
+`k = 6`. The contracted graph is denser, and the faster `G_6` run owes its
+speed to needing one trial instead of two. The cycle passes both verifiers and
+is a fourth, distinct from the three before it.
 
 **Projection for `k = 7`**, arithmetic on two points rather than a measurement.
 On the three-level build a trial grows from 0.97 s at `k = 5` to about 340 s at
@@ -555,10 +571,13 @@ On the three-level build a trial grows from 0.97 s at `k = 5` to about 340 s at
 | | one trial | 2 trials | 11 trials | memory |
 |---|---|---|---|---|
 | two-level | ~3.7 days | ~7 days | — | ~355 GB |
-| three-level | ~15 h | ~31 h | ~7 days | ~355 GB |
-| three-level, chains contracted | ~7 h | ~14 h | ~3 days | ~200 GB |
+| three-level | ~15 h | ~31 h | ~7 days | ~370 GB |
+| three-level, chains contracted | ~15 h | ~31 h | ~7 days | ~215 GB |
 
-The three-level memory peak was not recorded; the structure itself adds little.
+The contracted row is corrected by the measurement above: the 7 h per trial
+first projected assumed the time would fall with the node count, and it does
+not. Its memory scales the 5.7 GB of `G_6` linearly in `n`. The three-level
+build peaks at 9.9 GB uncontracted, against 9.5 GB for the two-level one.
 LKH moves the `k = 7` bottleneck from time to memory; it does not remove it.
 
 **A finding on the way.** Comparing the exported fixed edges with a hand
