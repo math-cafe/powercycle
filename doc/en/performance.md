@@ -311,7 +311,8 @@ One observation that has not been acted on: finding a 2-factor is polynomial —
 it reduces to perfect matching — so the four hours of SAT in tour one solve in
 an NP-complete formalism a problem that is in P. NP-hardness only enters with
 connectivity. Replacing the first tour with a matching algorithm is the largest
-untried lever.
+untried lever. Section 7 measures a different route: handing the whole search,
+connectivity included, to a dedicated Hamiltonian cycle heuristic.
 
 ---
 
@@ -430,3 +431,78 @@ would pass through this peak before reaching the formula at all.
 A guard should refuse when the floor exceeds available memory, since that is
 arithmetic rather than prediction, and warn when five times the floor does.
 Not implemented.
+
+---
+
+## 7. An external solver: LKH-3
+
+**Hypothesis.** The pipeline solves a 2-factor with SAT, then repairs it into
+one cycle. LKH-3, Helsgaun's Lin-Kernighan implementation, searches directly
+for a Hamiltonian cycle: given the graph as a TSPLIB `TYPE : HCP` problem, it
+looks for a tour of cost 0, every non-edge costing 1. It also accepts edges
+that every tour must use. Whether it beats SAT plus repair is a measurement,
+not something its reputation settles.
+
+**Setup.** LKH-3.0.14, built from source with its own Makefile. `G_k(n)` is
+exported after the preflight: the edges degree-two propagation forces go to
+`FIXED_EDGES_SECTION`, the ones it forbids are left out. The exporter is a
+throwaway program over `PowerGraph` and `hamiltonian_preflight`, not yet in
+the repository; at `k = 6` it runs in 11 s with a 1.5 GB peak and writes a
+552 MB problem. Parameters:
+
+```text
+SUBGRADIENT = NO
+OPTIMUM = 0
+STOP_AT_OPTIMUM = YES
+RUNS = 1
+OUTPUT_TOUR_FILE = <name>.$.tour
+```
+
+**Measured, one run each** — two for `G_5` — so the timings carry the 25% noise
+of section 1 rather than the paired-run standard. The gap at `k = 6` is far
+outside it.
+
+| | fixed | forbidden | trials | LKH | SAT + repair |
+|---|---|---|---|---|---|
+| `G_5(246877)` | 198 205 (53%) | 60 195 | 2 | 4.6 to 4.8 s | 7.1 s |
+| `G_6(15748961)` | 9 756 659 (37%) | 2 480 896 | 2 | **41 min** | ~27 h 45 |
+
+At `k = 6`: 25 s of preprocessing, trial 1 ended at cost 3 after 1 411 s —
+three non-edges, so three paths covering every vertex — and trial 2 reached
+cost 0 at 2 409 s. The cgroup peak was 9.5 GB, on one core, against 9.88 GB for
+`pc-search`.
+
+Both cycles pass both independent verifiers, and both **differ from the
+published witnesses**: `G_5(246877)` and `G_6(15748961)` each have a second,
+independently found Hamiltonian cycle. They are not published. As controls,
+LKH finds the unique Hamiltonian cycle of `G_2(32)` instantly, and on
+`G_2(31)` it stops at cost 1, as it must.
+
+**The trap.** With LKH's defaults the `G_5` run printed nothing for ten minutes
+and was stopped. For `HCP` problems LKH always runs its subgradient ascent,
+here `n/2` iterations over sparse 1-trees, to learn node penalties. With every
+edge of the graph costing 0 there is nothing to learn. `SUBGRADIENT = NO`
+brought the run to 4.8 s.
+
+**`OUTPUT_TOUR_FILE`.** LKH writes `TOUR_FILE` only at the end of a run.
+`OUTPUT_TOUR_FILE` is rewritten after every trial that improves the best tour,
+`$` in the name standing for its cost, so a run stopped early still leaves its
+cost-3 tour behind — the starting point a hybrid with the alternating repair
+would need.
+
+**Memory is still the wall.** About 600 bytes per vertex at `k = 6`. Linear
+extrapolation to `n = 587 761 723` gives about 355 GB, before the problem file
+of roughly 20 GB is even written. That figure is arithmetic, not a measurement.
+LKH moves the `k = 7` bottleneck from time to memory; it does not remove it.
+
+**A finding on the way.** Comparing the exported fixed edges with a hand
+contraction of `G_2(32)` showed that degree-two propagation never forbids an
+edge joining the two ends of a forced path. It detects the short cycle such an
+edge would close only afterwards, as `ForcedSubcycle`. On `G_2(32)` the missing
+rule leaves `6–19` allowed, and with it two forced edges, `17–19` and `1–8`, go
+undetected. How many edges the rule would add at `k = 5` and `k = 6` has not
+been measured.
+
+**Verdict: open.** Two instances, one run each, and a 40-fold gain where the
+pipeline is slowest. Not integrated: no repository tooling drives LKH yet, and
+it would not change the `k = 7` picture without a machine several times larger.
