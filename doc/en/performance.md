@@ -443,7 +443,10 @@ looks for a tour of cost 0, every non-edge costing 1. It also accepts edges
 that every tour must use. Whether it beats SAT plus repair is a measurement,
 not something its reputation settles.
 
-**Setup.** LKH-3.0.14, built from source with its own Makefile. `G_k(n)` is
+**Setup.** LKH-3.0.14, built from source with its own Makefile, which compiles
+with `-O3 -march=native`; the measurements below use its default
+`TWO_LEVEL_TREE` unless stated, and the build question is taken up further
+down. `G_k(n)` is
 exported after the preflight: the edges degree-two propagation forces go to
 `FIXED_EDGES_SECTION`, the ones it forbids are left out. `pc-tsplib export`
 does this; at `k = 6` it runs in 11 s with a 1.5 GB peak and writes a 552 MB
@@ -491,9 +494,71 @@ brought the run to 4.8 s.
 cost-3 tour behind — the starting point a hybrid with the alternating repair
 would need.
 
-**Memory is still the wall.** About 600 bytes per vertex at `k = 6`. Linear
-extrapolation to `n = 587 761 723` gives about 355 GB, before the problem file
-of roughly 20 GB is even written. That figure is arithmetic, not a measurement.
+**Compiler flags do nothing; the tour structure does.** Seven builds on
+`G_5(490463)`, three interleaved runs each, median wall time:
+
+| build | median | |
+|---|---|---|
+| gcc `-O3 -march=native`, LKH's default | 12.56 s | 1.00× |
+| gcc + LTO | 12.48 s | 1.01× |
+| gcc + PGO + LTO | 12.35 s | 1.02× |
+| clang | 12.79 s | 0.98× |
+| clang + LTO | 13.28 s | 0.95× |
+| clang + PGO + LTO | 12.52 s | 1.00× |
+| gcc + `THREE_LEVEL_TREE` | **8.26 s** | **1.52×** |
+
+The six two-level builds return the same tour byte for byte, so they follow
+the same search path and the comparison is of code speed alone: within noise.
+The profiles were trained on `G_5(246877)` and `G_5(600000)`, not on the
+instance timed. One trap: gcc names its profile files after the build
+directory, so a profile-use build in a fresh directory silently finds none.
+
+`THREE_LEVEL_TREE` is LKH's compile-time switch for large instances. It keeps
+the tour as a three-level list, so a flip costs about `n^(1/3)` instead of
+`n^(1/2)`. It also changes the search path — a different, equally valid tour —
+so its gain mixes faster moves with a different trajectory:
+
+| | two-level | three-level |
+|---|---|---|
+| `G_5(246877)` | 2 trials, 4.6 s | 11 trials, 11.2 to 11.6 s |
+| `G_5(490463)` | 12.6 s | 8.3 s |
+| `G_5(2000000)`, one run | 278 s | 258 s |
+| `G_6(15748961)`, one run | 2 452 s | **719 s** |
+
+At `k = 6` trial 1 ended at cost 2 after 372 s and trial 2 reached cost 0 at
+675 s: each trial 3.3 to 3.8 times faster, the advantage growing with `n` as
+the theory says. The cycle passes both verifiers and is a third one, distinct
+from the published witness and from the two-level run. At `k = 5` the trials
+are twice as fast but eleven of them were needed: **the number of trials, two
+to eleven so far, is the real unknown in any projection.** The installed LKH is
+the three-level build.
+
+`G_5(2000000)` also shows that size is not the whole story: only 5% of its
+edges are fixed, against 37% at `k = 6`, and one trial costs 273 s where
+`G_6`, eight times larger, needs about 340. The first value of an island is
+not a typical instance.
+
+**Memory is still the wall.** About 600 bytes per vertex at `k = 6`, measured
+on the two-level build. Linear extrapolation to `n = 587 761 723` gives about
+355 GB, before the problem file of roughly 20 GB is even written.
+
+LKH keeps every vertex, including the interior of the fixed chains, which have
+nothing left to choose. At `k = 6` the fixed edges form 2 821 104 chains with
+6 935 555 interior vertices; replacing each chain by its two ends joined by a
+fixed edge leaves 8 813 406 vertices, 56% of `n`, as an ordinary TSP. Not
+implemented.
+
+**Projection for `k = 7`**, arithmetic on two points rather than a measurement.
+On the three-level build a trial grows from 0.97 s at `k = 5` to about 340 s at
+`k = 6`, as `n^1.41`:
+
+| | one trial | 2 trials | 11 trials | memory |
+|---|---|---|---|---|
+| two-level | ~3.7 days | ~7 days | — | ~355 GB |
+| three-level | ~15 h | ~31 h | ~7 days | ~355 GB |
+| three-level, chains contracted | ~7 h | ~14 h | ~3 days | ~200 GB |
+
+The three-level memory peak was not recorded; the structure itself adds little.
 LKH moves the `k = 7` bottleneck from time to memory; it does not remove it.
 
 **A finding on the way.** Comparing the exported fixed edges with a hand
@@ -505,6 +570,6 @@ undetected. How many edges the rule would add at `k = 5` and `k = 6` has not
 been measured.
 
 **Verdict: open.** Two instances, one run each, and a 40-fold gain where the
-pipeline is slowest. `pc-tsplib` makes it reproducible, but `pc-search`
+pipeline is slowest — 140-fold with the three-level build. `pc-tsplib` makes it reproducible, but `pc-search`
 remains the default: LKH is an external program, and it would not change the
 `k = 7` picture without a machine several times larger.
