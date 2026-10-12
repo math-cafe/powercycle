@@ -117,6 +117,8 @@ The two mathematical results behind the table above have their own documents:
 lower bound, and [`doc/en/non-hamiltonicity.md`](doc/en/non-hamiltonicity.md)
 for what a certificate looks like when the degree argument is not enough —
 which so far has happened exactly once, at `k = 2`.
+[`doc/en/cube-necklaces.md`](doc/en/cube-necklaces.md) is a research note on
+extending Gerbicz's proof for squares to every `n >= 473` for cubes.
 
 ## Development
 

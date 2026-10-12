@@ -425,6 +425,10 @@ three independent derivations that agree on it.
 `G_2(31)` — the one known case where the degree argument is not enough — and
 which certificate forms scale.
 
+[`cube-necklaces.md`](cube-necklaces.md) is a research note, not a result: what
+of R. Gerbicz's induction for squares carries over to cubes, with the nice
+pairs measured for `n = 473 .. 2000` by `scripts/nice-pairs.py`.
+
 ## 11. Performance
 
 Optimisation attempts, their measurements and their verdicts are recorded in
