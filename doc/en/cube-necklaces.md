@@ -21,7 +21,8 @@ G_3(n) is Hamiltonian   <=>   n >= 473
 has no finite island. More generally the natural conjecture is that, for
 `k >= 3`, `G_k(n)` is Hamiltonian exactly when `n` lies in an admissible island;
 `k = 2`, where 31 is admissible and fails, would be the exception. All the
-values tested so far agree, but they are few per `k`.
+values tested so far agree; [`islands.md`](islands.md) section 6 lists them,
+among them every `n` of the finite island of `k = 5`.
 
 ---
 

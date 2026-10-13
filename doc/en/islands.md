@@ -253,9 +253,36 @@ sufficient. **`k = 2` is the standing counterexample**: `I_2` starts at 31, and
 is still not Hamiltonian — see [`non-hamiltonicity.md`](non-hamiltonicity.md).
 The true minimum is 32.
 
-For `k = 3, 4, 5` the two halves meet, because a witness exists at the very
-first admissible `n`. That coincidence is what makes those values theorems
-rather than bounds. For `k >= 6` only the lower bound is established.
+For `k = 3, 4, 5, 6` the two halves meet, because a witness exists at the
+very first admissible `n`. That coincidence is what makes those values theorems
+rather than bounds. For `k >= 7` only the lower bound is established.
+
+**A conjecture: for `k >= 3`, `G_k(n)` is Hamiltonian exactly when `n` lies in
+`I_k`.** `k = 2` would be the only exception, at its single value 31: Gerbicz
+proved every `n >= 32` Hamiltonian (see
+[`cube-necklaces.md`](cube-necklaces.md)). Every admissible value tested so far
+agrees. Each cycle below is checked by both independent verifiers:
+
+| k | admissible islands | values with a verified Hamiltonian cycle |
+|---|---|---|
+| 3 | `[473, inf)` | **every `n` from 473 to 800** (328 values) |
+| 4 | `[9641, 9999] U [18193, inf)` | 9641 only; the rest of the finite island is untested |
+| 5 | `[246877, 248831] U [490463, inf)` | **every `n` of the finite island**, all 1 955 values; and 490463, 600000, 2000000 |
+| 6 | `[15748961, 16777215] U [30039769, inf)` | 15748961 only |
+
+The `k = 5` island is the strongest single piece of evidence: a whole finite
+island, value by value, where the degree condition is the only obstruction
+implemented and none of the 1 955 graphs fails. Those cycles were computed in
+August 2026 (an archive dated 21 August; the engine and run parameters were not
+recorded) and checked again on 13 October 2026. They are kept outside the
+repository until the next witness format; their SHA-256, one per `n`, are in
+[`data/k5-island-cycles.csv`](data/k5-island-cycles.csv), so the set is fixed
+now and can be checked when published. The `k = 3` cycles come from
+`scripts/nice-pairs.py cycles`, through `pc-tsplib` and LKH.
+
+Untested and cheap: the 359 values of the `k = 4` finite island, a few minutes
+with LKH. Untested and expensive: the `k = 6` finite island, about a million
+graphs of 15 million vertices.
 
 ---
 
