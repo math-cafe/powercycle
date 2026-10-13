@@ -138,20 +138,118 @@ matter.
 
 ---
 
-## 6. Where this stands
+## 6. The glue, and why it fails as is
+
+**What Gerbicz's code does.** His `squares.c` (2018-01-21, 17 MB, mostly
+tables) stores in `data[4*49][73][4]` one glue per residue `r = 24..72`, parity
+of `n0` and output (`N` or `N + 1`): a sequence of 73 items, each a glue integer
+or a copy `{c, orientation, base sequence}`. A copy term is
+`49*seq[k] + c` for odd `k` and `- c` for even `k`. Because every base sequence
+starts at `1` and ends at `8` or `3` according to the parity of its length, the
+copy ends are `49 + c` and `49*8 ± c` or `49*3 ± c`: they depend on `c` and on
+parities, never on `n0`. Each glue is therefore a finite problem, solved once.
+
+**The model.** `scripts/gerbicz-glue.py` builds that finite problem for any
+`k`: glue integers as nodes, each copy as a chain with two ends joined by a
+fixed edge — the `pc-tsplib --contract` picture — and the edge from `1` to the
+output's end fixed; LKH looks for a Hamiltonian cycle. It checks one output at
+a time and ignores the nice-pair condition between `N` and `N + 1`, so a
+success is necessary, not sufficient. It reproduces Gerbicz's facts for
+squares:
+
+| | ends | feasible (parity, residue) cases |
+|---|---|---|
+| squares, `M = 49` | 8 / 3 | 100 of 100 |
+| squares, `M = 25` | 8 / 3 | 18 of 52, the rest blocked |
+
+**Cubes.** With `1 + E` a cube, the possible ends below the glue bound are 7
+and 26 at `M = 125`, and 7, 26, 63, 124, 215, 342, 511 at `M = 1331`:
+
+| | ends | result |
+|---|---|---|
+| `M = 125` | 7 / 26 | 0 of 252: every case has a node with no junction |
+| `M = 125` | 26 / 7 | 0 of 252: 192 blocked, 60 without a cycle |
+| `M = 1331` | all 42 ordered pairs, 26 residues each | none works for every residue; best 7/26 and 7/215, about half |
+
+At `M = 1331` the failures are not scattered. With ends 7/26 they are the small
+residues when `n0` is even and the large ones when it is odd — exactly the
+cases where many copies come from the base sequence ending in 7 — and the
+blocked nodes are always those copies' ends.
+
+**The obstruction.** A copy runs from `M + c` to `M*E ± c`, and `1 + E` is a
+cube by construction, so
+
+```text
+start + end of the same copy = M*(1 + E) = m^3 * 8 = (2m)^3        for E = 7
+```
+
+The natural partner of a copy's end is its own start, which is forbidden. The
+next cube, `(2m + 1)^3`, lies about `3*(2m)^2 = 12 m^2` away, while a window of
+copy ends spans only `M = m^3`. Ends in the middle of the window find no other
+partner unless `12 m^2 < m^3`, roughly `m > 12`. At `m = 5` this fails
+completely; at `m = 11` only the ends near the window's edges have a partner.
+For `E = 26`, `M*27 = (3m)^3` and the gap is about `27 m^2`, roughly `m > 27`.
+Since the two ends must differ by parity and only 7 has `1 + E = 8`, the other
+end forces `m` near 29, `M = 24 389`, and base cases up to about twenty
+million: out of reach. These thresholds are orders of magnitude, not exact
+bounds.
+
+Squares escape it: `49*9 = 21^2` is the same forbidden junction, but the next
+square is only `2*21 + 1 = 43 < 49` away. Squares are dense enough, cubes are
+not.
+
+**Ways around:**
+
+1. Recurse on paths whose ends `S, E` do **not** sum to a cube, which removes
+   the forbidden junction, and close into a cycle only at the top level, with a
+   glue of its own. Only the inner levels need the shape of the base cases.
+2. Several base sequences per length with **different ends** — triplets or more
+   instead of pairs — to multiply the copy ends and hence the junctions. Pairs
+   suffice to cover residues; more sequences might be what diversifying the
+   ends needs.
+3. Ends chosen by the length modulo 4 or more instead of its parity.
+4. A larger `m`, 17 or 23: removes the obstruction for `E = 7` but not for
+   `E = 26`, at the cost of base cases up to millions.
+
+**Variant 1 at `M = 125`, measured.** `scripts/gerbicz-glue.py --start S`
+models it, with the same limits as above. Over every `S` and pair of ends
+tried, none covers all 252 cases:
+
+| start `S` | ends, even / odd length | feasible cases | where it fails |
+|---|---|---|---|
+| 2 | 1 / 4 | **220 of 252** | a block: `n0` even with `r = 172..187`, `n0` odd with `r = 62..77` |
+| 1 | 2 / 3 | 164 of 252 | |
+| 4 | 2 / 1 | 110 of 252 | the mixed cases; all four extremes pass |
+| 1 | 2 / 4, 4 / 3, 2 / 17 | 58, 52, 34 of 252 | |
+| 1 | 3 / 4, 4 / 5 | 2 of 252 | |
+
+The failures stay structured. For `S = 2` with ends 1/4, the 32 failing cases
+are exactly those where almost every copy comes from the odd-length base
+sequence and so ends in 4, and none is solved by a retry of two minutes each:
+an obstruction, not a search limit. With `S = 2` and `E_even = 1`, no
+`E_odd <= 62` passes the two cases where it ends every copy. Ends of 1 work
+alone because their window, `125 ± c`, sits next to the glue integers; no other
+end tried does. A configuration would need two ends that each work when they
+dominate and also work mixed, and with 62 glue integers and a parity rule none
+was found. The path variant removes the forbidden junction, but not the
+shortage of junctions at `M = 125`.
+
+---
+
+## 7. Where this stands
 
 - Nice pairs exist for cubes, almost everywhere from the threshold on, and the
-  induction could start at `A = 801`. Triplets or non-consecutive lengths,
-  considered to fill missing values, are not needed at `k = 3` on this range.
-- The decisive open step is the **glue**: joining 125 copies with 62 small
-  integers, under fixed endpoints, so that the result is again a nice pair for
-  `N` and `N + 1`. Gerbicz's code found his in about a second for squares mod
-  49. Whether one exists for cubes mod 125 decides the method.
-- The endpoints are not yet constrained: Gerbicz fixes them by parity, and the
-  glue will dictate which ones cubes need, which may thin out the usable pairs.
-- Base cases up to about `100 000` at `M = 125`. At the current pace, 7.5 s per
-  value on average but up to two minutes near `n = 2000`, a faster search will
-  be needed.
+  induction could start at `A = 801`.
+- Gerbicz's glue does not carry over unchanged: with closing ends, cubes meet a
+  structural obstruction at `M = 125` and at `M = 1331` (section 6). The path
+  variant removes that obstruction but, at `M = 125`, covers at most 220 of the
+  252 cases. Untried: the path variant at `M = 1331`, ends by the length modulo
+  4, several base sequences per length.
+- Even a glue covering every case would be a necessary condition only: the
+  nice-pair condition between `N` and `N + 1`, and the top-level closing glue,
+  are not modelled yet.
+- Base cases up to `M * 801`. At the current pace, 7.5 s per value on average
+  but up to two minutes near `n = 2000`, a faster search will be needed.
 
 Reproduce:
 
@@ -159,4 +257,8 @@ Reproduce:
 scripts/nice-pairs.py search 3 1500
 scripts/nice-pairs.py sweep 3 473 2000 sweep.csv 10
 scripts/nice-pairs.py cycles 3 473 800 cycles/ cycles.csv
+scripts/gerbicz-glue.py 2 7 8 3          # squares, M = 49: all feasible
+scripts/gerbicz-glue.py 3 5 7 26         # cubes, M = 125: all blocked
+scripts/gerbicz-glue.py 3 11 7 26 111    # cubes, M = 1331, every 111th residue
+scripts/gerbicz-glue.py 3 5 1 4 --start 2   # path variant, M = 125: 220 of 252
 ```
