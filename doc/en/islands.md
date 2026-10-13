@@ -266,7 +266,7 @@ agrees. Each cycle below is checked by both independent verifiers:
 | k | admissible islands | values with a verified Hamiltonian cycle |
 |---|---|---|
 | 3 | `[473, inf)` | **every `n` from 473 to 800** (328 values) |
-| 4 | `[9641, 9999] U [18193, inf)` | 9641 only; the rest of the finite island is untested |
+| 4 | `[9641, 9999] U [18193, inf)` | **every `n` of the finite island**, all 359 values |
 | 5 | `[246877, 248831] U [490463, inf)` | **every `n` of the finite island**, all 1 955 values; and 490463, 600000, 2000000 |
 | 6 | `[15748961, 16777215] U [30039769, inf)` | 15748961 only |
 
@@ -277,12 +277,14 @@ August 2026 (an archive dated 21 August; the engine and run parameters were not
 recorded) and checked again on 13 October 2026. They are kept outside the
 repository until the next witness format; their SHA-256, one per `n`, are in
 [`data/k5-island-cycles.csv`](data/k5-island-cycles.csv), so the set is fixed
-now and can be checked when published. The `k = 3` cycles come from
-`scripts/nice-pairs.py cycles`, through `pc-tsplib` and LKH.
+now and can be checked when published. The `k = 3` and `k = 4` cycles come from
+`scripts/nice-pairs.py cycles`, through `pc-tsplib` and LKH, and are rebuilt in
+about a minute each; the `k = 4` island took 67 s of CPU, at most 0.55 s per
+value. Their SHA-256 are in [`data/k4-island-cycles.csv`](data/k4-island-cycles.csv).
 
-Untested and cheap: the 359 values of the `k = 4` finite island, a few minutes
-with LKH. Untested and expensive: the `k = 6` finite island, about a million
-graphs of 15 million vertices.
+So every finite island tested is Hamiltonian throughout, at `k = 4` and
+`k = 5`. Untested: the `k = 6` finite island, about a million graphs of 15
+million vertices.
 
 ---
 
