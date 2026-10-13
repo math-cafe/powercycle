@@ -28,3 +28,6 @@ __pycache__/
 
 # Local scratch
 /tmp/
+
+/data/witnesses/
+/trash/
