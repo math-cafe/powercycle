@@ -278,10 +278,35 @@ measured across the five published witnesses — six times the floor. An
 encoding that stores which incident edge was taken would close most of that
 gap: the `k = 7` witness would drop from 920 MB to about 126 MB.
 
-**Not done, deliberately.** Decoding such a witness requires rebuilding the
-graph, which at `k = 7` is 33 GB. The plain list verifies with twenty lines of
-any language and no data structure at all. That self-containedness is what
-makes a witness citable, and it is worth more than a factor of thirteen.
+**First dropped on a wrong premise.** The reason given here was that decoding
+such a witness requires rebuilding the graph, 33 GB at `k = 7`. It does not.
+The neighbours of `v` in `G_k(n)` are the values `b^k - v` with
+`v < b^k <= v + n` and `b^k != 2v`: a formula, no graph.
+
+The simplest such encoding stores the base itself: starting from `v = 1`, the
+next vertex is `b^k - v`, one base per line, `n - 1` lines. Decoding is that one
+subtraction, and every sum is a `k`-th power by construction, so a verifier
+only has to check that the values are `1..n`, each once, and that the last one
+plus 1 is a `k`-th power. Measured on the published witnesses, xz on both:
+
+| k | plain list | bases, text | bases, one byte each |
+|---|---|---|---|
+| 3 | 852 B | 168 B | 152 B |
+| 4 | 10 300 B | 568 B | 484 B |
+| 5 | 258 744 B | 7 524 B | 5 740 B |
+| 6 | 24 744 912 B | 1 576 820 B | 1 470 388 B |
+
+15.7 times smaller than the plain list at `k = 6`, and up to 45 times at
+`k = 5`, far below the `log2(average degree)` floor above: long runs of
+repeated bases compress, forced chains alternating between two powers. The
+rate depends on the cycle: an LKH cycle of `G_5(246877)` compresses half as
+well as the published SAT one. Bases written as text cost only 7 % more than
+raw bytes, so the text form keeps the witness human-readable. Relative ranks
+among usable bases, the original idea, compress worse than absolute bases.
+
+The plain list keeps its role: twenty lines of any language verify it with no
+encoding to understand. The two are complementary, and the bundle format of the
+next repository publishes both, as parallel trees.
 
 ---
 
