@@ -318,12 +318,24 @@ agrees. Each cycle below is checked by both independent verifiers:
 
 The `k = 5` island is the strongest single piece of evidence: a whole finite
 island, value by value, where the degree condition is the only obstruction
-implemented and none of the 1 955 graphs fails. Those cycles were computed in
-August 2026 (an archive dated 21 August; the engine and run parameters were not
-recorded) and checked again on 13 October 2026. They are kept outside the
-repository until the next witness format; their SHA-256, one per `n`, are in
-[`data/k5-island-cycles.csv`](data/k5-island-cycles.csv), so the set is fixed
-now and can be checked when published. The `k = 3` and `k = 4` cycles come from
+implemented and none of the 1 955 graphs fails. Every `n` of it now has **two
+independent cycles**:
+
+- **the reference cycles**, recomputed on 14 October 2026 by
+  `scripts/witness-sweep.py` with full provenance per `n`: LKH-3.0.14
+  three-level build (binary SHA-256 `bb05ca46...`), contracted chains, seed 1,
+  repository commit `6d5f7cd`. 1 955 of 1 955 found and accepted by both
+  verifiers, in 1 h 09 of wall time and 14.8 h of LKH time, median 16.6 s and
+  15 trials per value, at most 299 s and 296 trials;
+- **the August cycles**, computed in August 2026 (an archive dated 21 August;
+  engine and parameters not recorded), checked again by both verifiers on
+  13 October.
+
+None of the 1 955 reference cycles coincides with its August counterpart: two
+different searches found two different cycles for every `n`. The cycles stay
+outside the repository until the next witness format; both sets of SHA-256, one
+row per `n`, are in [`data/k5-island-cycles.csv`](data/k5-island-cycles.csv),
+so they are fixed now and can be checked when published. The `k = 3` and `k = 4` cycles come from
 `scripts/nice-pairs.py cycles`, through `pc-tsplib` and LKH, and are rebuilt in
 about a minute each; the `k = 4` island took 67 s of CPU, at most 0.55 s per
 value. Their SHA-256 are in [`data/k4-island-cycles.csv`](data/k4-island-cycles.csv).
