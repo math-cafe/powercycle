@@ -238,6 +238,52 @@ Beyond `u64` it predicts three finite islands at `k = 13` (`q = 32, 34, 36`)
 and two at `k = 14` (`q = 36, 38`, a first step at `2k + 8`), which `pc-scan`
 cannot replay.
 
+**Isolated vertices.** Going from `G_k(n)` to `G_k(n+1)` adds the vertex
+`N = n + 1`, whose neighbours are the `p - N` with `p` a `k`-th power,
+`N < p <= 2N` and `p != 2N`, the loop. A vertex with a neighbour joins an
+existing component, so the added vertex starts a separate component exactly
+when it is isolated:
+
+```text
+N is isolated in G_k(N)   <=>   no k-th power lies strictly between N and 2N
+```
+
+For `m^k <= N < (m+1)^k` that means `(m+1)^k >= 2N`. The isolated vertices are
+therefore exactly the ranges
+
+```text
+m^k  <=  N  <=  floor((m+1)^k / 2)        for every m with (1 + 1/m)^k > 2
+```
+
+and none exist beyond `floor(m0^k / 2)`, where `m0` is the least `m` with
+`(1 + 1/m)^k < 2`, about `k / ln 2 - 1/2`.
+
+A natural guess is that once vertex 1 has two neighbours — `deg(1) >= 2` in
+`G_k(n)` exactly when `n >= 3^k - 1` — an added vertex is never isolated. It
+holds only for `k = 2`. For `k >= 3` it fails at once: the next power after
+`3^k` is `4^k`, and `4^k < 2 * 3^k` needs `(4/3)^k < 2`, false from `k = 3`
+on, so `N = 3^k` itself is isolated. At `k = 3`, vertex 1 has neighbours 7 and
+26 in `G_3(26)`, yet 27 has none in `G_3(27)`: the next cube, 64, exceeds 54.
+
+| k | `deg(1) >= 2` from `n =` | last isolated `N` | first `N` isolated despite `deg(1) >= 2` |
+|---|---|---|---|
+| 2 | 8 | 4 | none |
+| 3 | 26 | 32 = 4^3 / 2 | 27 |
+| 4 | 80 | 648 = 6^4 / 2 | 81 |
+| 5 | 242 | 8 403 | 243 |
+| 6 | 728 | 265 720 | 729 |
+| 7 | 2 186 | 5 000 000 = 10^7 / 2 | 2 187 |
+| 8 | 6 560 | 214 990 848 = 12^8 / 2 | 6 561 |
+
+An isolated vertex is a blocking vertex of degree zero, and the last one,
+`floor(m0^k / 2)`, is a loop position already in the chain: `10^7/2` at
+`k = 7`, `12^8/2` at `k = 8`. The condition `(1 + 1/m)^k` against 2 is the one
+that ends the odd powers' turn as blockers above: one arithmetic frontier,
+seen as isolated vertices, as blockers and as the end of the islands. All of
+this lies far below the admissible islands, where every degree is at least two
+already; it describes the structure of `G_k(n)` for small `n`, not a new
+obstruction to Hamiltonicity.
+
 ---
 
 ## 6. What this does and does not prove
