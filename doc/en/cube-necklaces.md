@@ -235,6 +235,30 @@ dominate and also work mixed, and with 62 glue integers and a parity rule none
 was found. The path variant removes the forbidden junction, but not the
 shortage of junctions at `M = 125`.
 
+**Variant 1 at `M = 1331`, measured.** Same model, `m = 11`: 665 glue
+integers, 1 331 copies, and 2 664 cases, the two parities of `n0` times the
+1 332 residues. `scripts/gerbicz-screen-1331.py` screens in three stages, with
+LKH capped at 60 s per case:
+
+| stage | triples `(S, E_even, E_odd)`, entries up to 10 | kept |
+|---|---|---|
+| no sum `S + E` a cube | 624 | — |
+| every node of degree at least 2, on 16 sample cases | 150 | 6 s |
+| the four extreme cases solved, those where one base sequence ends every copy | 104 | 48 min |
+| **every case solved**, first three triples in order | 3 of 3 | 10 h 28 in all |
+
+All three triples tried cover the 2 664 cases: `S = 1` with ends 2/3, 2/4 and
+2/5. The obstruction of `M = 125` is gone: at `m = 11` the windows of copy ends,
+`1331 ± c` and `1331*E ± c`, meet enough cubes for every mix of base sequences.
+Only three of the 104 candidates were run in full, the first three in sorted
+order, and none failed; many more probably work. Log:
+`doc/en/data/gerbicz-screen-1331.log`.
+
+What this does not show, as for every glue measured here: the model checks one
+output at a time, ignores the nice-pair condition between `N` and `N + 1`, and
+leaves the closing into a cycle to a top-level glue. A success is necessary,
+not sufficient.
+
 ---
 
 ## 7. Where this stands
@@ -243,12 +267,13 @@ shortage of junctions at `M = 125`.
   induction could start at `A = 801`.
 - Gerbicz's glue does not carry over unchanged: with closing ends, cubes meet a
   structural obstruction at `M = 125` and at `M = 1331` (section 6). The path
-  variant removes that obstruction but, at `M = 125`, covers at most 220 of the
-  252 cases. Untried: the path variant at `M = 1331`, ends by the length modulo
-  4, several base sequences per length.
-- Even a glue covering every case would be a necessary condition only: the
-  nice-pair condition between `N` and `N + 1`, and the top-level closing glue,
-  are not modelled yet.
+  variant removes that obstruction. At `M = 125` it covers at most 220 of the
+  252 cases; **at `M = 1331` it covers all 2 664**, with `S = 1` and ends 2/3,
+  2/4 or 2/5, in the single-output model.
+- Even this glue covering every case is a necessary condition only: the
+  nice-pair condition between `N` and `N + 1`, and the top-level glue that
+  closes the path into a cycle, are not modelled yet. They are what is left
+  for the induction to work at `M = 1331`.
 - Base cases up to `M * 801`. At the current pace, 7.5 s per value on average
   but up to two minutes near `n = 2000`, a faster search will be needed.
 
@@ -262,4 +287,5 @@ scripts/gerbicz-glue.py 2 7 8 3          # squares, M = 49: all feasible
 scripts/gerbicz-glue.py 3 5 7 26         # cubes, M = 125: all blocked
 scripts/gerbicz-glue.py 3 11 7 26 111    # cubes, M = 1331, every 111th residue
 scripts/gerbicz-glue.py 3 5 1 4 --start 2   # path variant, M = 125: 220 of 252
+scripts/gerbicz-screen-1331.py           # path variant, M = 1331: 2664 of 2664 (about 10 h)
 ```
