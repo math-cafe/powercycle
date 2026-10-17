@@ -134,7 +134,9 @@ is below it, and the vertices from there up hold only `15^6` in their window.
 That island is a phantom.
 
 Two further conditions decide the shape of an island, both verified against
-the measured intervals for every case in the table:
+the measured intervals for every case in the table, and proved for every
+`k >= 2` in [`islands-theorem.md`](islands-theorem.md), with the start of each
+island and the number of finite ones:
 
 ```text
 the island from q exists          <=>   (1 + 1/q)^k < 3/2
