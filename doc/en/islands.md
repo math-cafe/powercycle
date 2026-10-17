@@ -124,8 +124,11 @@ the next power.
 | 7 | `306110016 = 18^7/2` | `19^7` | 587 761 723 |
 
 `m = 2k + 2` for `k = 2..5`, then `2k + 4` for `k = 6..9`, then `2k + 6` for
-`k = 10..12`. The jumps are why no single closed form covers every `k` —
-section 5 shows where they come from. At
+`k = 10..12`. The jumps are why no closed form in `k` alone covers every `k` —
+section 5 shows where they come from. Defined instead as the least even `m`
+with `(1 + 1/m)^k < 3/2`, `m` gives the first admissible `n`,
+`(m+1)^k - m^k/2`, for every `k >= 2`: a theorem, proved in
+[`least-admissible.md`](least-admissible.md). At
 `k = 6` the candidate from `m = 14` would be 7 625 857, but `14^6 = 7529536`
 is below it, and the vertices from there up hold only `15^6` in their window.
 That island is a phantom.
