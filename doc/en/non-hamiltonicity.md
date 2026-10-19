@@ -261,3 +261,49 @@ That is worth keeping in mind before adding more structural filters. It also
 means the negative half of every published result rests on one short
 arithmetic argument, which is why that argument has three independent
 derivations behind it.
+
+
+### Does the argument of section 3 carry over to `k >= 3`?
+
+Its engine is general: vertices near `n` see roughly the powers in
+`(n, 2n]`, and where only two lie there, they have degree two and force their
+edges. Measured:
+
+| graph | powers in `(n, 2n]` | vertices of degree two |
+|---|---|---|
+| `G_2(31)` | 36, 49 | 10 (32 %) |
+| `G_2(100)` | 121, 144, 169, 196 | 0 |
+| `G_3(473)` | 512, 729 | 172 (36 %) |
+| `G_3(800)` | 1000, 1331 | 92 (12 %) |
+| `G_3(5000)` | 5832, 6859, 8000, 9261 | 0 |
+| `G_4(9641)` | `10^4`, `11^4` | 3 986 (41 %) |
+| `G_5(246877)` | `12^5`, `13^5` | 110 244 (45 %) |
+
+Two powers in `(n, 2n]` is exactly the situation at the start of an island —
+the loop position `q^k/2` waits for `(q + 1)^k`, see
+[`islands-theorem.md`](islands-theorem.md) — and there the forced structure is
+large, larger as `k` grows. Further into an island more powers enter the
+window and the degree-two vertices disappear.
+
+But the argument proves non-Hamiltonicity only when the residual case analysis
+closes every branch on two cycles or more. After propagation and contraction,
+`G_2(31)` leaves 13 nodes and two branches; `G_3(473)` leaves 210 nodes, 67
+chains and 279 free edges, and LKH finds a cycle in it. For `k >= 3` there is
+nothing to prove this way: no admissible `n` has ever failed, and the
+conjecture of [`islands.md`](islands.md), section 6, says none does.
+
+**A heuristic for the exception at `k = 2`, not a proof.** The share left free
+by propagation is comparable — 13 of 31 vertices remain as nodes at `k = 2`,
+210 of 473 at `k = 3`, about 42 to 44 % — but the absolute size is not. A
+residual of 13 nodes has few configurations, and none of them may close into
+one cycle, as at `n = 31`. A residual of hundreds or millions of nodes has so
+many that a complete dead end becomes implausible. `k = 2` is the only exponent
+whose first island starts that low, at 31; from `k = 3` on it starts at 473 or
+more. If that reading is right, `G_2(31)` is the only admissible
+non-Hamiltonian power-sum graph, which is the conjecture.
+
+Read the other way, the forced paths are explicit products of reflections that
+cover a large share of the graph at the start of every island. They could serve
+to **build** cycles rather than refute them: the induction of
+[`cube-necklaces.md`](cube-necklaces.md) for `k = 3`, or a proof that the
+residual puzzle of a whole finite island always has a solution.
