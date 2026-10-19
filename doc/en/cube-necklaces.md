@@ -133,7 +133,8 @@ second.
 
 **Cycles below the induction.** One Hamiltonian cycle of `G_3(n)` for every
 `n = 473 .. 800`, found by `pc-tsplib` and LKH, checked by `pc-tsplib tour` and
-the independent Rust verifier: 328 of 328, in 3 s. The values the recursion
+the independent Rust verifier: 328 of 328, in 3 s; published in
+[`witness/k3-n473-800/`](../../witness/k3-n473-800/). The values the recursion
 will not reach are therefore covered directly, and the gaps above do not
 matter.
 

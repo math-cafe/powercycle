@@ -24,6 +24,10 @@ cycle.
 It remains valid and independently verified, and records how the search
 progressed.
 
+[`k3-n473-800/`](k3-n473-800/) holds one Hamiltonian cycle of `G_3(n)` for
+every `n` from 473 to 800, evidence for the conjecture that every admissible
+`n` is Hamiltonian for `k >= 3`.
+
 For `k = 2` the answer is the classical square-sum problem and is already known;
 see OEIS [A071984](https://oeis.org/A071984) and
 [A272259](https://oeis.org/A272259), whose rows start at `n = 32`.

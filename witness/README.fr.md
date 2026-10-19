@@ -24,6 +24,10 @@ pour lequel `G_k(n)` possède un cycle hamiltonien.
 `k = 5`. Il reste valide et vérifié de façon indépendante, et documente la
 progression de la recherche.
 
+[`k3-n473-800/`](k3-n473-800/) contient un cycle hamiltonien de `G_3(n)` pour
+chaque `n` de 473 à 800, à l'appui de la conjecture selon laquelle tout `n`
+admissible est hamiltonien pour `k >= 3`.
+
 Pour `k = 2`, la réponse relève du square-sum problem classique et est déjà
 connue ; voir l'OEIS [A071984](https://oeis.org/A071984) et
 [A272259](https://oeis.org/A272259), dont les lignes commencent à `n = 32`.
