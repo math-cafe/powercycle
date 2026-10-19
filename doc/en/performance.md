@@ -646,6 +646,26 @@ for `k = 7`: a machine with 192 GB or more, or a decomposition done by posum
 itself — Hamiltonian paths with fixed ends found by separate LKH processes and
 glued together, in the spirit of Gerbicz's construction.
 
+**LKH-2, measured on `G_6`, 2026-10-19.** LKH-2.0.11, the earlier line with
+fewer problem types (archive SHA-256 `95535d19a3051716a17d65833570884603ef24e1cb11821803547b6052b21c0a`),
+reads the same HCP problems with fixed edges. Built with the three-level tree,
+on the same contracted `G_6(15748961)` and seed 1:
+
+| | LKH-3.0.14 | LKH-2.0.11 |
+|---|---|---|
+| `sizeof(Node)` | 528 bytes | 384 bytes |
+| peak resident memory | 5.8 to 6.0 GB, 685 bytes per node | **4.7 GB, 541 bytes per node** |
+| trials | 1 | 1 |
+| first trial | 373 s | **327 s** |
+| LKH in all | about 6 min 30 | 5 min 51 |
+
+LKH-2 reports a tour of cost 0, not yet expanded and checked by the
+verifiers. Memory falls by 21 %, as the smaller node structure predicts; time
+is no worse on this single run. At `k = 7` the estimate becomes about 173 GB
+instead of 190: still four times this machine, but under 192 GB. LKH-2 stays
+an option for posum — a build script for 2.0.11 and `version = "2.0.11"` in the
+provenance — worth adopting only for a `k = 7` search on a larger machine.
+
 **A finding on the way.** Comparing the exported fixed edges with a hand
 contraction of `G_2(32)` showed that degree-two propagation never forbids an
 edge joining the two ends of a forced path. It detects the short cycle such an
