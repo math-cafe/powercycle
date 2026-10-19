@@ -119,6 +119,106 @@ answer to the square-sum problem, and Bert Dobbelaere noted in OEIS
 the argument written as a certificate: two branches, each closing on two
 cycles.
 
+### A proof by hand, every step arithmetic
+
+The certificate above can be checked without a computer. Each step asks only
+whether a sum is a square; the squares available are `4, 9, 16, 25, 36, 49`,
+since sums stay below `2 * 31 = 62`.
+
+**Step 1: the top vertices have degree two.** For `v` in `25..31`, the window
+`(v, v + 31]` lies inside `(25, 62]`, which holds only 36 and 49; so `v` is
+adjacent to exactly `36 - v` and `49 - v`. For 16 and 17 the window holds only
+25 and 36. For 18 it holds 25, 36 and 49, but `36 = 18 + 18` is the excluded
+loop. These ten vertices force twenty edges, two each:
+
+```text
+16: 9, 20     17: 8, 19     18: 7, 31     25: 11, 24    26: 10, 23
+27: 9, 22     28: 8, 21     29: 7, 20     30: 6, 19     31: 5, 18
+```
+
+**Step 2: saturation.** Vertex 7 now has two forced edges (18, 29), so its
+edges to 2 and 9 are forbidden; likewise 8 (17, 28) loses 1, 19 (17, 30) loses
+6, and 20 (16, 29) loses 5.
+
+**Step 3: two more forced vertices.** Vertex 2, adjacent to 7, 14 and 23, has
+lost 7: its edges to 14 and 23 are forced. Then 23 (26, 2) is saturated and
+loses 13, and 13, adjacent to 3, 12 and 23, keeps exactly 3 and 12.
+
+**The forced structure.** The forced edges form five disjoint paths, and three
+vertices are still free:
+
+```text
+B: 5-31-18-7-29-20-16-9-27-22      C: 6-30-19-17-8-28-21
+D: 10-26-23-2-14      E: 11-25-24      A: 3-13-12      free: 1, 4, 15
+```
+
+Every interior vertex is settled. Each path end needs exactly one more edge,
+each free vertex two, and the edges still possible are:
+
+```text
+5: 4, 11      22: 3, 14     6: 3, 10      21: 4, 15     10: 6, 15
+14: 11, 22    11: 5, 14     24: 1, 12     3: 1, 6, 22   12: 4, 24
+1: 3, 15, 24      4: 5, 12, 21      15: 1, 10, 21
+```
+
+No path can close on itself: the sums of its two ends, `27, 27, 24, 35, 15`,
+are not squares.
+
+**Step 4: two cases, at vertex 5.**
+
+- *5 joins 11.* Then 14 must join 22, and 3 cannot use 22. Vertex 4 has lost 5,
+  so it joins both 12 and 21. Then 24 must join 1, and 15, having lost 21,
+  joins both 1 and 10. Vertex 1 is full (24, 15), so 3 joins 6. Everything is
+  decided, and the edges close **two cycles**: paths B, D, E with 15 and 1 (20
+  vertices), and paths A, C with 4 (11 vertices).
+- *5 joins 4.* Then 11 must join 14, 14 is done, 22 must join 3, and 4 needs
+  one more edge, to 12 or to 21.
+  - *4 joins 21.* Then 12 must join 24, and 1 is left with a single possible
+    neighbour, 15, since 3 and 24 are taken: impossible.
+  - *4 joins 12.* Then 21 must join 15, 24 must join 1, 1 must join 15 for its
+    second edge, 15 is full, and 10 joins 6. Again **two cycles**: paths B, A
+    with 4 (14 vertices), and the rest (17 vertices).
+
+Every case ends in two cycles or in a contradiction, so `G_2(31)` has no
+Hamiltonian cycle. ∎
+
+**A remark on what the steps do.** An edge of sum `s` maps `v` to `s - v`, a
+reflection; two in a row make a translation, as `49 - (36 - v) = v + 13`. The
+forced path B is such a product of reflections, `5 -> 31 -> 18 -> 7 -> ...`,
+alternating translations of `+13`, `+11`, `-13`, `+11`. A Hamiltonian cycle is a
+product of reflections that visits every number once and returns to its start;
+the proof shows that at `n = 31` the reflections available cannot be glued into
+one such product. No purely local invariant — a count, a congruence, the total
+of the edge sums, always `2 (1 + ... + 31) = 992` — can show this, since
+`G_2(31)` has 2-factors and they satisfy every such invariant: the argument has
+to use, somewhere, that a Hamiltonian cycle is connected.
+
+### Seen through Hamiltonian paths, and why 32 is enough
+
+The same fact reads more plainly through paths. An exhaustive search
+([`scripts/g2-31-paths.py`](../../scripts/g2-31-paths.py), a few seconds)
+finds **349 Hamiltonian paths** in `G_2(31)`, with 172 distinct pairs of ends,
+and **no pair of ends sums to a square**: every way of visiting `1..31` once
+ends on two numbers that cannot be joined. That is non-Hamiltonicity again,
+stated as an obstruction on the ends.
+
+Adding 32 changes no edge among `1..31`, since adjacency depends only on the
+sum. The new vertex has exactly two neighbours, `4` (`32 + 4 = 36`) and `17`
+(`32 + 17 = 49`), so a Hamiltonian cycle of `G_2(32)` is exactly a Hamiltonian
+path of `G_2(31)` from 4 to 17, closed through 32. Among the 349 paths, **exactly
+one runs from 4 to 17**:
+
+```text
+4, 21, 28, 8, 1, 15, 10, 26, 23, 2, 14, 22, 27, 9, 16, 20, 29, 7, 18, 31,
+5, 11, 25, 24, 12, 13, 3, 6, 30, 19, 17
+```
+
+So `G_2(32)` has exactly one Hamiltonian cycle, the published witness, and the
+search explains why it is unique. In terms of the forced edges of section 3: in
+`G_2(31)`, vertex 17 has degree two, so the chain `6-30-19-17-8-28-21` is
+forced; 32 gives 17 a third neighbour, the chain breaks between 17 and 8, and
+the edge `8-1`, forbidden in `G_2(31)`, becomes usable — it is in the cycle.
+
 ---
 
 ## 4. A tempting argument that is circular
