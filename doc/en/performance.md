@@ -626,9 +626,25 @@ conjecture predicts. Against `G_6`, the forced share rises from 37 % to 40.7 %
 and the nodes left fall from 56 % to 50.6 % of `n`. The memory estimate, now
 from the exact node count — 600 bytes per node for LKH plus 20 bytes per vertex
 for the contraction — replaces the 215 GB extrapolated above. Ways forward, none
-tried: a machine with 256 GB, LKH's partitioning of very large instances into
-bounded subproblems from an initial tour, or fewer bytes per node through LKH's
-candidate parameters, to be measured first on `G_6`.
+tried at first: a machine with 256 GB, LKH's partitioning into subproblems, or
+fewer bytes per node through LKH's candidate parameters.
+
+**Where LKH's memory goes, measured on `G_6`, 2026-10-19.** On the contracted
+`G_6(15748961)`, 8 813 404 nodes, the peak resident memory after preprocessing
+and 90 s of the first trial is the same with `MAX_CANDIDATES = 5`, posum's
+setting, and with 3: 5 764 MB, 685 bytes per node. For a problem given as an
+edge list LKH takes every edge as a candidate — 3.8 per node on average, up to
+14 — so the parameter has no effect, and candidates cost only about 75 bytes
+per node at 16 bytes each. Most of the rest is LKH's node structure:
+`sizeof(Node)` is 528 bytes in LKH-3.0.14, with dozens of fields serving other
+problem types — coordinates in double precision, demands, depots, time windows,
+colours. Removing them would mean rewriting much of LKH's source, and would
+still leave about 450 bytes per node, some 145 GB at `k = 7`. Partitioning does
+not help either: LKH allocates the whole node array, about 157 GB at `k = 7`,
+before it cuts the problem into subproblems; it saves time, not memory. Left
+for `k = 7`: a machine with 192 GB or more, or a decomposition done by posum
+itself — Hamiltonian paths with fixed ends found by separate LKH processes and
+glued together, in the spirit of Gerbicz's construction.
 
 **A finding on the way.** Comparing the exported fixed edges with a hand
 contraction of `G_2(32)` showed that degree-two propagation never forbids an
