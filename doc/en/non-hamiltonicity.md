@@ -193,6 +193,55 @@ of the edge sums, always `2 (1 + ... + 31) = 992` — can show this, since
 `G_2(31)` has 2-factors and they satisfy every such invariant: the argument has
 to use, somewhere, that a Hamiltonian cycle is connected.
 
+### A certificate without cases: one comb inequality
+
+The proof above ends in a case analysis. A shorter certificate replaces it by a
+property every Hamiltonian cycle has. The classical candidates fail here:
+
+- **toughness**: `G_2(31)` is 1-tough — no set `W` of vertices leaves more than
+  `|W|` components, checked over all `2^31` subsets;
+- **Grinberg's criterion**: `G_2(31)` is not planar;
+- **connectivity cuts alone**: the relaxation "every vertex has degree 2, every
+  cut is crossed at least twice", with fractional edges, has a solution;
+- **any local invariant**, as noted above.
+
+What works is a **comb inequality** (Chvátal, 1973). A comb is a handle `H` and
+an odd number `t >= 3` of pairwise disjoint teeth `T_1, ..., T_t`, each meeting
+`H` and its complement; every Hamiltonian cycle crosses the boundaries of `H`
+and of the teeth at least `3t + 1` times in all. That is a parity argument:
+each boundary is crossed an even number of times, at least twice, and an odd
+`t` prevents the total from stopping at `3t`.
+
+Start from the five forced paths and the free vertices 1, 4, 15 of steps 1 to 3
+above, each path standing for its two ends. Take the handle
+`H = {6, 10, 15, 21}` and the teeth `{10, 14}`, `{1, 15}`, `{3, 4, 6, 12, 21}`.
+
+1. **The comb forces the edge 4-5.** Writing the four crossing counts with the
+   degrees — 15 has exactly two edges among 1, 10, 21; the path end 6 exactly
+   one free edge, to 3 or 10; and 4 two among 5, 12, 21 — the comb inequality
+   becomes exactly `x(4,5) >= 1`. Every Hamiltonian cycle uses 4-5, and the case
+   "5 joins 11" is excluded by parity rather than explored.
+2. **Then everything follows, without branching.** 5 is served, so 11 joins 14,
+   22 joins 3, and 6 joins 10.
+3. **Connectivity concludes.** A Hamiltonian cycle leaves the group made of the
+   paths C, D, E and the vertices 1 and 15 at least twice, and only two exits
+   remain, 4-21 and 12-24: both are needed. Then 24 and 3 are served, and the
+   vertex 1 is left with a single possible neighbour, 15. Impossible. ∎
+
+The same certificate, as linear algebra: the degree equations, the five forced
+links, `0 <= x <= 1`, this one cut and this one comb admit no common solution,
+and a combination of them with small rational multipliers gives `0 >= 1`
+(Farkas). [`scripts/g2-31-comb.py`](../../scripts/g2-31-comb.py) recomputes the
+reduction from scratch and checks that combination in exact arithmetic,
+without any solver.
+
+This certificate is one-sided, like every short certificate of
+non-Hamiltonicity. A graph that violates a comb inequality, together with the
+cuts and degrees, cannot be Hamiltonian; a graph that satisfies every comb
+proves nothing, since the inequalities describing all Hamiltonian cycles are
+not known in any tractable form. For the admissible `n` with `k >= 3`, the
+evidence of Hamiltonicity remains the cycles themselves.
+
 ### Seen through Hamiltonian paths, and why 32 is enough
 
 The same fact reads more plainly through paths. An exhaustive search
