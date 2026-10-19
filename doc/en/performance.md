@@ -666,6 +666,35 @@ instead of 190: still four times this machine, but under 192 GB. LKH-2 stays
 an option for posum — a build script for 2.0.11 and `version = "2.0.11"` in the
 provenance — worth adopting only for a `k = 7` search on a larger machine.
 
+**Concorde's Chained Lin-Kernighan, tried on `G_6` and discarded, 2026-10-19.**
+`linkern`, from Concorde 03.12.19 (archive SHA-256
+`c3650a59c8d57e0a00e81c1288b994a99c5aa03e5d96a314834c2d8f9505c724`), handled
+25 million geometric cities on a 4 GB machine (Applegate, Cook and Rohe, 2003),
+far leaner than LKH, and reads sparse graphs (norm `SPARSE`: pairs not listed
+get a huge default length). The contracted `G_6` was given as an edge list,
+chain links at cost 0 and free edges at cost 1, so that a tour of length
+`nodes - links = 5 992 300` is a Hamiltonian cycle using every chain; that
+length was the stop bound.
+
+| starting tour | stopped after | outcome | memory |
+|---|---|---|---|
+| Quick-Borůvka, the default | 67 min | starting tour never finished | 815 MB at the stop |
+| random | 43 min | first Lin-Kernighan descent unfinished | about 2 GB |
+| greedy, 3.1 % jumps | 1 h 42 | first descent unfinished | about 2 GB, 225 bytes per node |
+| *LKH-3, for comparison* | *about 6 min 30* | *cycle found, one trial* | *685 bytes per node* |
+
+The greedy starting tour, built in 33 s by a Python sweep over the edge list,
+follows each chain link first, then a free edge to the unvisited neighbour
+with the fewest unvisited neighbours, and jumps to the least unvisited node
+only when stuck: 275 844 jumps for 8 813 404 nodes. Even from there `linkern`
+did not finish one descent in 1 h 42. Its economy is real — about a third of
+LKH's memory — but its search does not repair these sparse instances in
+useful time: repairing a jump means finding a sequence of exchanges that lands
+only on graph edges, where LKH's guided 5-opt moves succeed; the sparse norm,
+which scans a node's neighbour list for every length it is asked, does not
+help either. Discarded. The greedy tour remains a cheap start, 3 % of jumps,
+for LKH or for a decomposition.
+
 **A finding on the way.** Comparing the exported fixed edges with a hand
 contraction of `G_2(32)` showed that degree-two propagation never forbids an
 edge joining the two ends of a forced path. It detects the short cycle such an
