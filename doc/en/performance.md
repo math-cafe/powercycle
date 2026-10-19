@@ -605,13 +605,39 @@ not. Its memory scales the 5.7 GB of `G_6` linearly in `n`. The three-level
 build peaks at 9.9 GB uncontracted, against 9.5 GB for the two-level one.
 LKH moves the `k = 7` bottleneck from time to memory; it does not remove it.
 
+**Measured with posum 1.0.0, 2026-10-19.** `posum search 7 587761723` runs
+degree-two propagation, with the chain-closing rule, and the contraction before
+its memory guard refuses LKH. On this machine:
+
+| `G_7(587761723)` | value |
+|---|---|
+| edges | 968 075 013 |
+| forced | 393 598 028 (40.7 %) |
+| forbidden | 106 523 041 (11.0 %) |
+| free | 467 953 944 (48.3 %) |
+| chains contracted | 103 151 293 |
+| nodes left for LKH | 297 314 988 (50.6 % of `n`) |
+| propagation | 138 s, about 17.6 GB by posum's estimate |
+| LKH, by the guard's estimate | 190.1 GB, against 39.9 GB available |
+
+No obstruction: propagation completes, so the first admissible `n` at `k = 7`
+survives the argument that refutes `G_2(31)` up to its case analysis, as the
+conjecture predicts. Against `G_6`, the forced share rises from 37 % to 40.7 %
+and the nodes left fall from 56 % to 50.6 % of `n`. The memory estimate, now
+from the exact node count — 600 bytes per node for LKH plus 20 bytes per vertex
+for the contraction — replaces the 215 GB extrapolated above. Ways forward, none
+tried: a machine with 256 GB, LKH's partitioning of very large instances into
+bounded subproblems from an initial tour, or fewer bytes per node through LKH's
+candidate parameters, to be measured first on `G_6`.
+
 **A finding on the way.** Comparing the exported fixed edges with a hand
 contraction of `G_2(32)` showed that degree-two propagation never forbids an
 edge joining the two ends of a forced path. It detects the short cycle such an
 edge would close only afterwards, as `ForcedSubcycle`. On `G_2(32)` the missing
 rule leaves `6–19` allowed, and with it two forced edges, `17–19` and `1–8`, go
 undetected. How many edges the rule would add at `k = 5` and `k = 6` has not
-been measured.
+been measured. posum 1.0.0 implements the rule: at `G_6(15748961)` it
+leaves 8 813 404 nodes after contraction instead of 8 813 406.
 
 **Verdict: open.** Two instances, one run each, and a 40-fold gain where the
 pipeline is slowest — 140-fold with the three-level build. `pc-tsplib` makes it reproducible, but `pc-search`
