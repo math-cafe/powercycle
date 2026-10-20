@@ -199,7 +199,9 @@ The proof above ends in a case analysis. A shorter certificate replaces it by a
 property every Hamiltonian cycle has. The classical candidates fail here:
 
 - **toughness**: `G_2(31)` is 1-tough — no set `W` of vertices leaves more than
-  `|W|` components, checked over all `2^31` subsets;
+  `|W|` components, checked over all `2^31` subsets
+  ([`scripts/g2-31-tough.c`](../../scripts/g2-31-tough.c): 2 147 483 646
+  proper non-empty subsets, no violation, 71 s on one core; rerun 2026-10-20);
 - **Grinberg's criterion**: `G_2(31)` is not planar;
 - **connectivity cuts alone**: the relaxation "every vertex has degree 2, every
   cut is crossed at least twice", with fractional edges, has a solution;
