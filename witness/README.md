@@ -18,7 +18,7 @@ cycle.
 | 4 | **9641** | `11^4 - 10^4/2` | R. Tauraso, 2006 | [`k4-n9641/`](k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | this project | [`k5-n246877/`](k5-n246877/) |
 | 6 | **15748961** | `17^6 - 16^6/2` | this project | [`k6-n15748961/`](k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | no witness yet |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | no witness yet; lower bound in [`k7-n587761723/`](k7-n587761723/) |
 
 [`k5-n490463/`](k5-n490463/) holds an earlier, non-minimal witness for `k = 5`.
 It remains valid and independently verified, and records how the search
@@ -27,6 +27,10 @@ progressed.
 [`k3-n473-800/`](k3-n473-800/) holds one Hamiltonian cycle of `G_3(n)` for
 every `n` from 473 to 800, evidence for the conjecture that every admissible
 `n` is Hamiltonian for `k >= 3`.
+
+[`k4-n18193/`](k4-n18193/) holds a Hamiltonian cycle of `G_4(18193)`, the
+first value of the `k = 4` mainland: with the island bundle of
+power-sum-graphs 1.0.0, it shows that Hamiltonicity is not monotone in `n`.
 
 For `k = 2` the answer is the classical square-sum problem and is already known;
 see OEIS [A071984](https://oeis.org/A071984) and

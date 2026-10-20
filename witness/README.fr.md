@@ -18,7 +18,7 @@ pour lequel `G_k(n)` possède un cycle hamiltonien.
 | 4 | **9641** | `11^4 - 10^4/2` | R. Tauraso, 2006 | [`k4-n9641/`](k4-n9641/) |
 | 5 | **246877** | `13^5 - 12^5/2` | ce projet | [`k5-n246877/`](k5-n246877/) |
 | 6 | **15748961** | `17^6 - 16^6/2` | ce projet | [`k6-n15748961/`](k6-n15748961/) |
-| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | pas encore de témoin |
+| 7 | `>= 587761723` | `19^7 - 18^7/2` | — | pas encore de témoin ; borne inférieure dans [`k7-n587761723/`](k7-n587761723/) |
 
 [`k5-n490463/`](k5-n490463/) conserve un témoin antérieur, non minimal, pour
 `k = 5`. Il reste valide et vérifié de façon indépendante, et documente la
@@ -27,6 +27,11 @@ progression de la recherche.
 [`k3-n473-800/`](k3-n473-800/) contient un cycle hamiltonien de `G_3(n)` pour
 chaque `n` de 473 à 800, à l'appui de la conjecture selon laquelle tout `n`
 admissible est hamiltonien pour `k >= 3`.
+
+[`k4-n18193/`](k4-n18193/) contient un cycle hamiltonien de `G_4(18193)`,
+première valeur du continent de `k = 4` : avec le bundle d'île de
+power-sum-graphs 1.0.0, il montre que l'hamiltonicité n'est pas monotone en
+`n`.
 
 Pour `k = 2`, la réponse relève du square-sum problem classique et est déjà
 connue ; voir l'OEIS [A071984](https://oeis.org/A071984) et
