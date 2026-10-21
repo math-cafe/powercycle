@@ -33,6 +33,11 @@ première valeur du continent de `k = 4` : avec le bundle d'île de
 power-sum-graphs 1.0.0, il montre que l'hamiltonicité n'est pas monotone en
 `n`.
 
+[`k6-n30039769/`](k6-n30039769/) contient un cycle hamiltonien de
+`G_6(30039769)`, première valeur du continent de `k = 6`, dans le codage par
+bases. Voir [`../doc/en/continent.md`](../doc/en/continent.md) pour les autres
+calculs sur le continent.
+
 Pour `k = 2`, la réponse relève du square-sum problem classique et est déjà
 connue ; voir l'OEIS [A071984](https://oeis.org/A071984) et
 [A272259](https://oeis.org/A272259), dont les lignes commencent à `n = 32`.

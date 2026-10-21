@@ -32,6 +32,10 @@ every `n` from 473 to 800, evidence for the conjecture that every admissible
 first value of the `k = 4` mainland: with the island bundle of
 power-sum-graphs 1.0.0, it shows that Hamiltonicity is not monotone in `n`.
 
+[`k6-n30039769/`](k6-n30039769/) holds a Hamiltonian cycle of `G_6(30039769)`,
+the first value of the `k = 6` mainland, in the bases encoding. See
+[`../doc/en/continent.md`](../doc/en/continent.md) for the other runs on the mainland.
+
 For `k = 2` the answer is the classical square-sum problem and is already known;
 see OEIS [A071984](https://oeis.org/A071984) and
 [A272259](https://oeis.org/A272259), whose rows start at `n = 32`.
