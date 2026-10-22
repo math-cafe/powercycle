@@ -114,3 +114,6 @@ two verifiers of power-sum-graphs and by `scripts/verify-bases.sh`.
 So the end of the island is hard for local search, as Proposition 7.2
 predicts, but not obstructed: once the binary choices of the high ends follow
 the symmetry `h -> 16^6 - h`, the rest is easy.
+
+The same approach at the start of the `k = 7` island, where it reduces the
+problem rather than unblocks it: [`k7-start.md`](k7-start.md).
