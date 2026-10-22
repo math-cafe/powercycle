@@ -33,7 +33,10 @@ first value of the `k = 4` mainland: with the island bundle of
 power-sum-graphs 1.0.0, it shows that Hamiltonicity is not monotone in `n`.
 
 [`k6-n30039769/`](k6-n30039769/) holds a Hamiltonian cycle of `G_6(30039769)`,
-the first value of the `k = 6` mainland, in the bases encoding. See
+the first value of the `k = 6` mainland, in the bases encoding.
+[`k6-n16777215/`](k6-n16777215/) holds one of `G_6(16777215)`, the last value of
+the `k = 6` island and the hardest graph met so far, found with a motif
+imposed (see [`../doc/en/end-of-island.md`](../doc/en/end-of-island.md)). See
 [`../doc/en/continent.md`](../doc/en/continent.md) for the other runs on the mainland.
 
 For `k = 2` the answer is the classical square-sum problem and is already known;

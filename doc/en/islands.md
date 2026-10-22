@@ -319,7 +319,7 @@ agrees. Each cycle below is checked by both independent verifiers:
 | 3 | `[473, inf)` | **every `n` from 473 to 800** (328 values) |
 | 4 | `[9641, 9999] U [18193, inf)` | **every `n` of the finite island**, all 359 values |
 | 5 | `[246877, 248831] U [490463, inf)` | **every `n` of the finite island**, all 1 955 values; and 490463, 600000, 2000000 |
-| 6 | `[15748961, 16777215] U [30039769, inf)` | 15748961 only |
+| 6 | `[15748961, 16777215] U [30039769, inf)` | 15748961, 16777215 (both ends of the island) and 30039769 |
 
 The `k = 5` island is the strongest single piece of evidence: a whole finite
 island, value by value, where the degree condition is the only obstruction

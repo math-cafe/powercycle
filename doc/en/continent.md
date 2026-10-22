@@ -11,7 +11,7 @@ expects the graphs to be hardest.
 | 3 | every `n` from 801 to 10000 (9200) | all Hamiltonian, 1 trial each | [`data/sweep-k3-801-10000.tsv`](data/sweep-k3-801-10000.tsv) |
 | 4 | every `n` from 18194 to 30000 (11807) | all Hamiltonian, 1 trial each, about 1 s | [`data/sweep-k4-18194-30000.tsv`](data/sweep-k4-18194-30000.tsv) |
 | 6 | 30039769, start of the mainland | Hamiltonian, 3 trials, 4820 s | [`../../witness/k6-n30039769/`](../../witness/k6-n30039769/) |
-| 6 | 16777215, end of the island | not yet: best tour 10 edges short after 3 h; resumed | — |
+| 6 | 16777215, end of the island | Hamiltonian, with a motif imposed; every other search stalled ([`end-of-island.md`](end-of-island.md)) | [`../../witness/k6-n16777215/`](../../witness/k6-n16777215/) |
 
 With the 328 cycles of [`../../witness/k3-n473-800/`](../../witness/k3-n473-800/),
 every `n` from 473 to 10000 is Hamiltonian for `k = 3`. With the island bundle

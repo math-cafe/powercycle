@@ -1,0 +1,42 @@
+# Written by hand: this cycle was not found by `posum search` alone.
+id = "4caf699294398fb56bbb91d8d1bf8447892d62937f7de8911c4f28e6110cea73"
+k = 6
+n = 16777215
+found = "2026-10-22T21:05:13Z"
+engine = "lkh"
+cpu = "AMD Ryzen 9 7940HS w/ Radeon 780M Graphics"
+system = "Linux 7.2.9-1-cachyos"
+
+[lkh]
+version = "3.0.14"
+binary_sha256 = "66791e48dca1f49017585a56a9fe55775f6541adee526a313e73f55260b26761"
+nodes = 11390619
+
+# 1. The contracted problem written by `posum search 6 16777215`
+#    (power-sum-graphs 1.0.0) in its run directory.
+[problem]
+sha256 = "f81a67b120569fdca70dca765c0f7ec136c6b1d708159eb3bc1be4e54866e637"
+
+# 2. The same problem with the motif imposed:
+#    scripts/end-of-island `motif problem.hcp motif.hcp`.
+[motif]
+sha256 = "df329733a11f92b9a65e2d5b3bba33e1e42f0a20e6fd488e6fc87b30b3bc7bdf"
+imposed_edges = 1028253
+
+# 3. LKH from scratch on the motif problem; best tour 2 edges short.
+[[run]]
+parameters = "lkh/motif-a.par"
+seed = 21
+trials = 4
+seconds = 1120
+tour_sha256 = "a7d47f3dfd889b7dea153a5d31fd68fbca09b23b9ba2c79b4352927a388f0524"
+
+# 4. LKH from that tour: a Hamiltonian cycle at the first trial.
+[[run]]
+parameters = "lkh/motif-r25.par"
+seed = 25
+trials = 1
+seconds = 155
+tour_sha256 = "490bc709390b0d8ce4b601699388516debfc0f460f02a4f04600454acf6fd9f1"
+
+# 5. scripts/end-of-island `expand 6 16777215 tour cycle`.

@@ -35,7 +35,10 @@ power-sum-graphs 1.0.0, il montre que l'hamiltonicité n'est pas monotone en
 
 [`k6-n30039769/`](k6-n30039769/) contient un cycle hamiltonien de
 `G_6(30039769)`, première valeur du continent de `k = 6`, dans le codage par
-bases. Voir [`../doc/en/continent.md`](../doc/en/continent.md) pour les autres
+bases. [`k6-n16777215/`](k6-n16777215/) en contient un de `G_6(16777215)`,
+dernière valeur de l'île de `k = 6` et graphe le plus difficile rencontré
+jusqu'ici, trouvé en imposant un motif (voir
+[`../doc/en/end-of-island.md`](../doc/en/end-of-island.md)). Voir [`../doc/en/continent.md`](../doc/en/continent.md) pour les autres
 calculs sur le continent.
 
 Pour `k = 2`, la réponse relève du square-sum problem classique et est déjà
