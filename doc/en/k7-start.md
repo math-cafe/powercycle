@@ -27,7 +27,7 @@ degree three. After propagation (`structure`):
 |---|---|---|---|
 | nodes / n | 56.0 % | 67.9 % | **50.6 %** |
 | chain ends with 2 free edges | 38.4 % | 38.8 % | 40.3 % |
-| free hubs, small vertices of high degree | 11.6 % | **0 %** | 10.3 % |
+| free hubs: the vertices `1` to `c^k - S_c - 1`, of high degree | 11.7 % | **0 %** | 8.2 % |
 | free vertices of degree 3 | 24.3 % | 17.3 % | 22.4 % |
 
 Nothing points to a combinatorial difficulty specific to `k = 7`; the
