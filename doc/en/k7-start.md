@@ -92,7 +92,11 @@ the best tour**: the last non-edge was repaired in one trial.
 
 ## 4. What the motifs give at k = 7
 
-Measured with `impose`, propagation cascade included. LKH takes 645 bytes per
+Measured with `impose`, propagation included. Each edge of the first family
+joins a free vertex to a chain and removes one node; with it imposed, each
+edge of the second joins two chains and removes two; propagation removes a
+few more, about 6 % of the reduction at `k = 6` and under 0.5 % at `k = 7`.
+LKH takes 645 bytes per
 node (2.2 GB for the 3.41-million-node problem above):
 
 | motif | nodes | LKH memory |
