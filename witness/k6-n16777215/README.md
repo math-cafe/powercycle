@@ -44,11 +44,15 @@ imposed). `provenance.toml` records each step with the SHA-256 of its result:
    directory.
 
 The parameter files are those of the runs, with the file names of this
-record. A second run from the same tour (seed 26) gave another cycle, of
-identity `ae108229ea29ec360f47f4d1bbcc9a8194c1ed8b8020a2fc9976bc24ba6fcd63`.
-This cycle was not produced by posum alone, so it is not a posum witness.
+record. A second run from the same tour, with
+[`lkh/motif-r26.par`](lkh/motif-r26.par) (seed 26, first trial, 170 s), gave
+another cycle, stored as `ae108229.bases.xz`, of identity
+`ae108229ea29ec360f47f4d1bbcc9a8194c1ed8b8020a2fc9976bc24ba6fcd63`; it is
+accepted by the Rust verifier of power-sum-graphs 1.1.0 (plain list and bases)
+and by `scripts/verify-bases.sh`.
+Neither cycle was produced by posum alone, so neither is a posum witness.
 
-Accepted by both verifiers of power-sum-graphs 1.1.0 (Rust, on the plain list
+The first cycle is accepted by both verifiers of power-sum-graphs 1.1.0 (Rust, on the plain list
 and on the bases; Python, on the plain list) and by
 [`scripts/verify-bases.sh`](../../scripts/verify-bases.sh), which shares no code
 with them.

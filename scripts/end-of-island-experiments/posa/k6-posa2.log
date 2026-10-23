@@ -1,0 +1,17 @@
+11390619 nodes, 7 non-edges in the tour, depth 40, cap 400000
+7 paths, 0 s
+path 0 side 0: 1 ends reachable
+path 0 side 1: 1 ends reachable
+path 1 side 0: 1 ends reachable
+path 1 side 1: 1 ends reachable
+path 2 side 0: 2 ends reachable
+path 2 side 1: 1 ends reachable
+path 3 side 0: 1 ends reachable
+path 3 side 1: 1 ends reachable
+path 4 side 0: 1 ends reachable
+path 4 side 1: 1 ends reachable
+path 5 side 0: 1 ends reachable
+path 5 side 1: 1 ends reachable
+path 6 side 0: 1 ends reachable
+path 6 side 1: 2 ends reachable
+no join at this depth: increase DEPTH or CAP

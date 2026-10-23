@@ -1,0 +1,45 @@
+11390619 nodes
+best.7.tour: 7 defects
+  pos    570542    1031761 - 8168850   deg 6 3  sum 9200611  edge false
+  pos   2783545    8089337 - 10425302  deg 3 3  sum 18514639  edge false
+  pos   3256224    8283305 - 8295240   deg 3 3  sum 16578545  edge false
+  pos   5385035    3788576 - 8437796   deg 4 3  sum 12226372  edge false
+  pos   5985789    3882205 - 8727610   deg 4 3  sum 12609815  edge false
+  pos   6778719    3305650 - 8292327   deg 4 3  sum 11597977  edge false
+  pos   8503814    5753397 - 9069806   deg 3 3  sum 14823203  edge false
+best.10.tour: 10 defects
+  pos   2068138    8283305 - 8295240   deg 3 3  sum 16578545  edge false
+  pos   2497709    3788576 - 8437796   deg 4 3  sum 12226372  edge false
+  pos   3562068    3313924 - 9122440   deg 4 3  sum 12436364  edge false
+  pos   3655994    2597147 - 9155826   deg 5 3  sum 11752973  edge false
+  pos   4448341    3769491 - 7171874   deg 4 3  sum 10941365  edge false
+  pos   5701962    3882205 - 8727610   deg 4 3  sum 12609815  edge false
+  pos   5878631    1031761 - 8168850   deg 6 3  sum 9200611  edge false
+  pos   5943443    3698768 - 8089337   deg 4 3  sum 11788105  edge false
+  pos   7744060    3305650 - 8292327   deg 4 3  sum 11597977  edge false
+  pos  11184106    5753397 - 9069806   deg 3 3  sum 14823203  edge false
+best.11.tour: 11 defects
+  pos     75621    5766147 - 7707427   deg 3 3  sum 13473574  edge false
+  pos    852580    5331725 - 8021727   deg 3 3  sum 13353452  edge false
+  pos   5111710    7243234 - 8501153   deg 3 3  sum 15744387  edge false
+  pos   5967902    2652747 - 9116878   deg 5 3  sum 11769625  edge false
+  pos   6092029    6569205 - 8967138   deg 3 3  sum 15536343  edge false
+  pos   6221162    7716547 - 8870726   deg 3 3  sum 16587273  edge false
+  pos   7359190    7145724 - 8394123   deg 3 3  sum 15539847  edge false
+  pos   7522654    7941020 - 8833338   deg 3 3  sum 16774358  edge false
+  pos  10197768    7814832 - 9350030   deg 3 3  sum 17164862  edge false
+  pos  10627967    7733473 - 7756428   deg 3 3  sum 15489901  edge false
+  pos  10807903    6082458 - 7616002   deg 3 3  sum 13698460  edge false
+best.12.tour: 12 defects
+  pos    862218    7653740 - 7654712   deg 3 3  sum 15308452  edge false
+  pos   1201889    7799106 - 8374590   deg 3 3  sum 16173696  edge false
+  pos   1623943    5787350 - 8784158   deg 3 3  sum 14571508  edge false
+  pos   2983204    5274176 - 7603987   deg 3 3  sum 12878163  edge false
+  pos   3713112    3835217 - 9375242   deg 4 3  sum 13210459  edge false
+  pos   3942252    8472984 - 9197554   deg 3 3  sum 17670538  edge false
+  pos   6005066     675890 - 9059538   deg 7 3  sum 9735428  edge false
+  pos   6403958    1460877 - 8401210   deg 6 3  sum 9862087  edge false
+  pos   8252419    7530325 - 8279841   deg 3 3  sum 15810166  edge false
+  pos   8332230    2493580 - 8149512   deg 5 3  sum 10643092  edge false
+  pos   9242966    5710579 - 8909098   deg 3 3  sum 14619677  edge false
+  pos  10729606    3396481 - 8712340   deg 4 3  sum 12108821  edge false

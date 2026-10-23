@@ -28,8 +28,9 @@ the cycle whatever the compression.
 
 ## Provenance
 
-Found on 2026-10-13 by `tmp/gerbicz/cycles_473_800.py` (not versioned; the
-procedure is `scripts/nice-pairs.py cycles 3 473 800`, see
+Found on 2026-10-13 by [`generator/cycles_473_800.py`](generator/cycles_473_800.py)
+(copied from the unversioned `tmp/gerbicz/` on 2026-10-23, with its output
+`generator/cycles-473-800.csv`; the procedure is `scripts/nice-pairs.py cycles 3 473 800`, see
 [`doc/en/cube-necklaces.md`](../../doc/en/cube-necklaces.md)): `pc-tsplib
 export`, LKH-3, `pc-tsplib tour` for the check and the canonical form, then
 the independent Rust verifier of this repository. Checked again on 2026-10-19

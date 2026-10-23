@@ -1,0 +1,14 @@
+[package]
+name = "repair"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+posum-core = { path = "../../../../power-sum-graphs/crates/posum-core" }
+posum-lkh = { path = "../../../../power-sum-graphs/crates/posum-lkh" }
+powercycle-core = { path = "../../../src/powercycle/core" }
+powercycle-format = { path = "../../../src/powercycle/format" }
+rustsat = "0.7.5"
+rustsat-cadical = { version = "0.7.5", features = ["quiet"] }
+
+[workspace]

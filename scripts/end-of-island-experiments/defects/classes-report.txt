@@ -1,0 +1,50 @@
+largest classes (contracted degree, chain offset): count, vertex range
+  deg  3 offset   -7360353:   3861086  [7529536, 11390624]
+  deg  3 offset          0:   1973761  [5386592, 7360353]
+  deg  5 offset    7360353:   1214422  [1492992, 2985983]
+  deg  4 offset    7360353:   1044286  [1824792, 4030271]
+  deg  6 offset    7360353:    771559  [1000000, 1771560]
+  deg  7 offset    7360353:    468560  [500000, 999999]
+  deg  8 offset    7360353:    269298  [127809, 531440]
+  deg  4 offset   -7360353:    169181  [7360354, 7529535]
+  deg  9 offset    7360353:    144493  [117649, 262143]
+  deg 10 offset    7360353:     70994  [23328, 117648]
+  deg 11 offset    7360353:     31029  [15625, 46655]
+  deg 12 offset    7360353:     11530  [2048, 15624]
+  deg 13 offset    7360353:      3366  [729, 4095]
+  deg 14 offset    7360353:       666  [32, 728]
+  deg 15 offset    7360353:        62  [1, 63]
+  deg  3 offset    7360353:         2  [3764768, 3988898]
+  deg  3 offset   -5386591:         1  [6414846, 6414846]
+  deg  3 offset   -1356319:         1  [5386591, 5386591]
+  deg  3 offset   -1356317:         1  [5386590, 5386590]
+  deg  3 offset   -1356315:         1  [5386589, 5386589]
+  deg  3 offset   -1356313:         1  [5386588, 5386588]
+  deg  3 offset   -1356311:         1  [5386587, 5386587]
+  deg  3 offset   -1356309:         1  [5386586, 5386586]
+  deg  3 offset   -1356307:         1  [5386585, 5386585]
+  deg  3 offset   -1356305:         1  [5386584, 5386584]
+contracted degree 3: 6394634 of 11390619 nodes
+/home/fred/Projects/powercycle/tmp/continent/k6/k6-n16777215/best.7.tour:
+    8168850 (deg 3, offset Some(-7360353))  -    1031761 (deg 6, offset Some(7360353))
+    8089337 (deg 3, offset Some(-7360353))  -   10425302 (deg 3, offset Some(-7360353))
+    8283305 (deg 3, offset Some(-7360353))  -    8295240 (deg 3, offset Some(-7360353))
+    3788576 (deg 4, offset Some(7360353))  -    8437796 (deg 3, offset Some(-7360353))
+    3882205 (deg 4, offset Some(7360353))  -    8727610 (deg 3, offset Some(-7360353))
+    8292327 (deg 3, offset Some(-7360353))  -    3305650 (deg 4, offset Some(7360353))
+    9069806 (deg 3, offset Some(-7360353))  -    5753397 (deg 3, offset None)
+/home/fred/Projects/powercycle/tmp/continent/k6/lkh-b/best.6.tour:
+    5753397 (deg 3, offset None)  -    9069806 (deg 3, offset Some(-7360353))
+    8168850 (deg 3, offset Some(-7360353))  -    8283305 (deg 3, offset Some(-7360353))
+    8089337 (deg 3, offset Some(-7360353))  -   10425302 (deg 3, offset Some(-7360353))
+    8437796 (deg 3, offset Some(-7360353))  -    3788576 (deg 4, offset Some(7360353))
+    3305650 (deg 4, offset Some(7360353))  -    8292327 (deg 3, offset Some(-7360353))
+    3882205 (deg 4, offset Some(7360353))  -    8727610 (deg 3, offset Some(-7360353))
+/home/fred/Projects/powercycle/tmp/continent/k6/k6-n16777215-s3/best.7.tour:
+    9354016 (deg 3, offset Some(-7360353))  -    4722100 (deg 4, offset Some(-27337))
+    6765897 (deg 3, offset None)  -    3378299 (deg 4, offset Some(7360353))
+    5299500 (deg 3, offset Some(-1182137))  -    8848225 (deg 3, offset Some(-7360353))
+    8162103 (deg 3, offset Some(-7360353))  -    7764204 (deg 3, offset Some(-7360353))
+    8194425 (deg 3, offset Some(-7360353))  -     167191 (deg 9, offset Some(7360353))
+    8468445 (deg 3, offset Some(-7360353))  -    7655196 (deg 3, offset Some(-7360353))
+    4887703 (deg 3, offset Some(-358543))  -    7892632 (deg 3, offset Some(-7360353))

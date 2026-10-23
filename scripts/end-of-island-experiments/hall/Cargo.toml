@@ -1,0 +1,10 @@
+[package]
+name = "hall"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+posum-core = { path = "../../../../power-sum-graphs/crates/posum-core" }
+posum-lkh = { path = "../../../../power-sum-graphs/crates/posum-lkh" }
+
+[workspace]

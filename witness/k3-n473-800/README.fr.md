@@ -29,8 +29,9 @@ identifie le cycle quelle que soit la compression.
 
 ## Provenance
 
-Trouvés le 2026-10-13 par `tmp/gerbicz/cycles_473_800.py` (non versionné ; la
-procédure est `scripts/nice-pairs.py cycles 3 473 800`, voir
+Trouvés le 2026-10-13 par [`generator/cycles_473_800.py`](generator/cycles_473_800.py)
+(copié le 2026-10-23 depuis `tmp/gerbicz/`, non versionné, avec sa sortie
+`generator/cycles-473-800.csv` ; la procédure est `scripts/nice-pairs.py cycles 3 473 800`, voir
 [`doc/en/cube-necklaces.md`](../../doc/en/cube-necklaces.md)) : `pc-tsplib
 export`, LKH-3, `pc-tsplib tour` pour la vérification et la forme canonique,
 puis le vérificateur Rust indépendant de ce dépôt. Vérifiés de nouveau le

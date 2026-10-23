@@ -1,0 +1,15 @@
+ok    k2-n32: 2 witness files, both trees
+ok    k3-n473: 2 witness files, both trees
+ok    k3-r473-10000: 19056 witness files, both trees
+ok    k4-n9641: 2 witness files, both trees
+ok    k4-n9641-9999: 718 witness files, both trees
+ok    k4-r18193-30000: 23616 witness files, both trees
+ok    k5-n2000000: 2 witness files, both trees
+ok    k5-n246877: 2 witness files, both trees
+ok    k5-n246877-248831: 3910 witness files, both trees
+ok    k5-n490463: 2 witness files, both trees
+ok    k5-n600000: 2 witness files, both trees
+ok    k6-n15748961: 2 witness files, both trees
+ok    k6-n30039769: 2 witness files, both trees
+posum check: 13 bundles, 0 problems
+exit 0

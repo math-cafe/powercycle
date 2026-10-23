@@ -46,12 +46,15 @@ avec le SHA-256 de son résultat :
    répertoire.
 
 Les fichiers de paramètres sont ceux des calculs, avec les noms de fichiers de
-cet enregistrement. Un second calcul depuis le même tour (graine 26) a donné un
-autre cycle, d'identité
-`ae108229ea29ec360f47f4d1bbcc9a8194c1ed8b8020a2fc9976bc24ba6fcd63`. Ce cycle
-n'a pas été produit par posum seul ; ce n'est donc pas un témoin posum.
+cet enregistrement. Un second calcul depuis le même tour, avec
+[`lkh/motif-r26.par`](lkh/motif-r26.par) (graine 26, premier essai, 170 s), a
+donné un autre cycle, rangé dans `ae108229.bases.xz`, d'identité
+`ae108229ea29ec360f47f4d1bbcc9a8194c1ed8b8020a2fc9976bc24ba6fcd63` ; il est
+accepté par le vérificateur Rust de power-sum-graphs 1.1.0 (liste en clair et
+bases) et par `scripts/verify-bases.sh`. Aucun de ces deux
+cycles n'a été produit par posum seul ; ce ne sont donc pas des témoins posum.
 
-Accepté par les deux vérificateurs de power-sum-graphs 1.1.0 (Rust, sur la
+Le premier cycle est accepté par les deux vérificateurs de power-sum-graphs 1.1.0 (Rust, sur la
 liste en clair et sur les bases ; Python, sur la liste en clair) et par
 [`scripts/verify-bases.sh`](../../scripts/verify-bases.sh), qui ne partage aucun
 code avec eux.

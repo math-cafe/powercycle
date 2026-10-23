@@ -1,0 +1,4 @@
+356 sources
+345 distinct cycles; rejected sources:
+  tmp/lkh-c/g2-31.tour: cost > 0
+  tmp/lkh/g2-31.tour: cost > 0

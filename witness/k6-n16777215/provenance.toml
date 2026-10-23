@@ -40,3 +40,13 @@ seconds = 155
 tour_sha256 = "490bc709390b0d8ce4b601699388516debfc0f460f02a4f04600454acf6fd9f1"
 
 # 5. scripts/end-of-island `expand 6 16777215 tour cycle`.
+
+# A second cycle, from the same tour as run 4 with seed 26 (170 s, first
+# trial), expanded the same way; stored as ae108229.bases.xz.
+[second]
+id = "ae108229ea29ec360f47f4d1bbcc9a8194c1ed8b8020a2fc9976bc24ba6fcd63"
+parameters = "lkh/motif-r26.par"
+seed = 26
+trials = 1
+seconds = 170
+tour_sha256 = "7424147b2ad3580415818083bcced7e858219f9235dd35cc3beacebbab6bd3ba"

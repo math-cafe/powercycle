@@ -28,6 +28,8 @@ After propagation and contraction, 11 390 619 nodes are left to LKH, against
 ## 2. No obstruction found
 
 Each test below would have proved that no Hamiltonian cycle exists; none did.
+The tools are in
+[`../../scripts/end-of-island-experiments/`](../../scripts/end-of-island-experiments/).
 
 - **Hall.** A Hamiltonian cycle is a perfect 2-matching, which exists if and
   only if the bipartite double cover has a perfect matching; if not, a set
