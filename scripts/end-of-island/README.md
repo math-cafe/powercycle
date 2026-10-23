@@ -46,3 +46,15 @@ target/release/impose 6 15748961 16 c --expand tour cycle
 
 `../island-profile.py K N` gives the intervals on which the usable powers
 do not change, from which the zones are taken.
+
+Two memory-bounded searches, which failed at the start of the `k = 6`
+island (section 5 of the note):
+
+- `windows PROBLEM.hcp WORKDIR W ROUNDS PARALLEL SECONDS [TOUR]` repairs a
+  tour segment by segment, each segment a Hamiltonian path problem for LKH
+  between its fixed ends.
+- `relink PROBLEM.hcp WORKDIR R ROUNDS SECONDS [TOUR]` contracts the runs of
+  the tour farther than `R` from any defect and lets LKH relink them.
+
+Both read any HCP problem with fixed edges and start, without `TOUR`, from a
+Warnsdorff greedy that keeps the fixed edges.

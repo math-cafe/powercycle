@@ -102,6 +102,32 @@ node (2.2 GB for the 3.41-million-node problem above):
 | `c` + `c1` | 110 421 499 | ~71 GB, a motif that stalled at `k = 6` |
 
 With the motif `c` + ⅔ `c1`, checked at `k = 6`, `G_7(587761723)` fits a
-machine of 128 GB. On this one, another factor of two is needed: a
-decomposition into parts searched separately, or a solver that uses less
-memory per node on these sparse problems (about 1.4 free edges per node).
+machine of 128 GB. On this one, another factor of two is needed.
+
+## 5. Decomposition fails
+
+Two memory-bounded schemes were tried on `G_6(15748961)` (8 813 404 nodes,
+no motif), which LKH solves whole in 6 minutes. Both start from a full tour
+built without LKH by a Warnsdorff greedy that keeps the chains: 275 845
+non-edges, in 3 s.
+
+| method | LKH memory | result |
+|---|---|---|
+| `windows`: 4 tour segments, each a Hamiltonian path problem between its fixed ends, 15 min | ÷ 4 | 127 587, then 114 712 non-edges; all the gain in the first 5 s |
+| `windows`, 20 s per segment, segments moved by a golden-ratio step | ÷ 4 | 54 201 after 42 rounds, the gain per round shrinking |
+| `relink`: tour runs far from the defects contracted to links, `r = 3` then `r = 10` | ÷ 6 to 8 | stuck: 142 000 from the greedy, 65 000 from the windows |
+
+The cause is structural. A segment of a tour, taken alone, has no
+Hamiltonian path: in a typical segment of 2.2 million nodes, 229 nodes have
+no neighbour inside and 12 400 have one, so each forces a defect whatever
+LKH does (LKH even crashes on such a segment without a start tour). Edges
+join `u` to `p - u` for every power `p`, and the hubs reach every zone: no
+order of the vertices keeps the neighbours of a node near it. Relinking does
+not make up for it, since the ends of the contracted runs have almost no
+free partner left. A decomposition would need a partition in which every
+node keeps two neighbours in its part, with a small cut; the zones of
+section 2 are joined by tens of millions of edges each.
+
+So for `k = 7` two routes remain: the motif `c` + ⅔ `c1` on a machine of
+128 GB, or a solver that uses much less memory per node than LKH on these
+sparse problems (645 bytes per node for about 1.4 free edges per node).
