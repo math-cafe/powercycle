@@ -59,7 +59,8 @@ Two families of edges stand out:
   of Z4, `m` with `17^7 - m`.
 
 The same two matchings exist at the start of the `k = 6` island, where the
-cycle LKH found without any hint uses 78.9 % of the first.
+witness [`../../witness/k6-n15748961/`](../../witness/k6-n15748961/), found
+without any hint by `pc-patch` (SAT and repair), uses 78.9 % of the first.
 
 ## 3. Tests at the start of the k = 6 island
 
@@ -81,7 +82,8 @@ The cycles are accepted by both power-sum-graphs verifiers; they are not
 kept (`G_6(15748961)` has its witness), their identities are
 `89a2b3dc…` (`c`) and `8c9c94eb…` (`c` + ⅔ `c1`, the same cycle from both
 seeds). The two known cycles use the second matching for about 70 % of the
-vertices of Z5, evenly over the zone: imposing all of it takes away the
+vertices of Z5 (70.5 % for the `pc-patch` witness, 65.9 % for the cycle LKH
+found with `c` imposed), evenly over the zone: imposing all of it takes away the
 small vertices, hubs and low chain ends, that the other 30 % reach by base
 16, which is presumably why the full motif stalls.
 
